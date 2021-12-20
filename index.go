@@ -1,4 +1,4 @@
-package Adele
+package CaskDB
 
 type Indexer interface {
 	Len() int
@@ -14,7 +14,7 @@ func (i *Index) Len() int {
 	return 16 // 4 + 4 + 8 = 16 bytes
 }
 
-func (db *DB) buildStrIndex(e *Entry, idx *Index) {
+func (db DB) buildStrIndex(e *Entry, idx *Index) {
 	switch e.GetMarkType() {
 	case StringSet:
 		db.strIndex.idx.Put(e.key, idx)
@@ -24,7 +24,7 @@ func (db *DB) buildStrIndex(e *Entry, idx *Index) {
 }
 
 // put entry info in memory index
-func (db *DB) StoreStrIndex(e *Entry) error {
+func (db DB) StoreStrIndex(e *Entry) error {
 	f := db.activeFiles[String]
 	idx := &Index{
 		valueSize: e.valueSize,

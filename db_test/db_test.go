@@ -1,7 +1,7 @@
-package test
+package db_test
 
 import (
-	"Adele"
+	"CaskDB"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
@@ -10,12 +10,12 @@ import (
 
 // file merge
 func TestDB_StartMerge(t *testing.T) {
-	os.RemoveAll("/tmp/AdeleDB")
+	os.RemoveAll("/tmp/CaskDB")
 
-	cfg := Adele.DefaultConfig()
+	cfg := CaskDB.DefaultConfig()
 	cfg.MergeInterval = 5 * time.Second
 	cfg.MaxFileSize = 100
-	db, err := Adele.Open(cfg)
+	db, err := CaskDB.Open(cfg)
 	assert.Nil(t, err)
 
 	// 0.data.str

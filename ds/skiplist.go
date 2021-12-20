@@ -14,7 +14,6 @@ const (
 
 type SkipList struct {
 	header *skipListNode
-	rand   rand.Source // used to generate random numbers
 	level  int         // the highest level of current skip list
 	size   int
 }
@@ -27,14 +26,13 @@ type skipListNode struct {
 
 func NewSkipList() *SkipList {
 	return &SkipList{
-		header: NewSkipListNode(nil, nil, MaxLevel),
-		rand:   rand.NewSource(time.Now().UnixNano()),
+		header: newSkipListNode(nil, nil, MaxLevel),
 		level:  1,
 		size:   0,
 	}
 }
 
-func NewSkipListNode(key []byte, value interface{}, level int) *skipListNode {
+func newSkipListNode(key []byte, value interface{}, level int) *skipListNode {
 	return &skipListNode{
 		key:   key,
 		value: value,
@@ -42,8 +40,19 @@ func NewSkipListNode(key []byte, value interface{}, level int) *skipListNode {
 	}
 }
 
+func (skn *skipListNode) Value() interface{} {
+	return skn.value
+}
+
+func (sl *SkipList) Get(key []byte) interface{} {
+	if n := sl.find(key); n != nil {
+		return n.value
+	}
+	return nil
+}
+
 // find node
-func (sl *SkipList) Get(key []byte) *skipListNode {
+func (sl *SkipList) find(key []byte) *skipListNode {
 	x := sl.header
 
 	for i := sl.level - 1; i >= 0; i-- {
@@ -81,17 +90,17 @@ func (sl *SkipList) Put(key []byte, value interface{}) {
 	// insert newly node:
 	// the level of newly inserted node is too high,
 	// so the front node is the header, save the header to update
-	lvl := sl.RandomLevel()
+	lvl := sl.randomLevel()
 	if lvl > sl.level {
-		for i := lvl - 1; i >= sl.level-1; i-- {
+		for i := sl.level; i < lvl; i++ {
 			update[i] = sl.header
 		}
 		sl.level = lvl
 	}
 
 	// other sub nodes to be inserted
-	newNode := NewSkipListNode(key, value, lvl)
-	for i := sl.level - 1; i >= 0; i-- {
+	newNode := newSkipListNode(key, value, lvl)
+	for i := 0; i < lvl; i++ {
 		newNode.next[i] = update[i].next[i]
 		update[i].next[i] = newNode
 	}
@@ -126,22 +135,20 @@ func (sl *SkipList) Remove(key []byte) {
 }
 
 // get random level
-func (sl *SkipList) RandomLevel() int {
+func (sl *SkipList) randomLevel() int {
 	level := 1
 
-	// for each cycle, the probability is multiplied by 1 / 2
-	for level < MaxLevel && sl.Random() < Probability {
+	// for each cycle, the probability is multiplied by 'Probability'
+	for level < MaxLevel && random() < Probability {
 		level++
 	}
+	//fmt.Println(level)
 
 	return level
 }
 
 // generate random numbers from 0 to 1
-func (sl *SkipList) Random() float64 {
-	return float64(sl.rand.Int63() / 1 << 63)
-}
-
-func (skn *skipListNode) Value() interface{} {
-	return skn.value
+func random() float64 {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Float64()
 }

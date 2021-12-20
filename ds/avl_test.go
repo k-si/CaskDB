@@ -13,32 +13,32 @@ import (
 	functional test
 */
 
-func TestSkipList_Get(t *testing.T) {
-	sl := NewSkipList()
-	n := sl.Get([]byte("name"))
+func TestAVLTree_Get(t *testing.T) {
+	avl := NewAVLTree()
+	n := avl.Get([]byte("name"))
 	assert.Nil(t, nil, n)
 }
 
-func TestSkipList_Put(t *testing.T) {
-	sl := NewSkipList()
-	sl.Put([]byte("name"), "zhang san")
+func TestAVLTree_Put(t *testing.T) {
+	avl := NewAVLTree()
+	avl.Put([]byte("name"), "zhang san")
 }
 
-func TestSkipList_Remove(t *testing.T) {
-	sl := NewSkipList()
-	sl.Remove([]byte("name"))
+func TestAVLTree_Remove(t *testing.T) {
+	avl := NewAVLTree()
+	avl.Remove([]byte("name"))
 }
 
-func TestSkipList_1(t *testing.T) {
-	sl := NewSkipList()
+func TestAVLTree_1(t *testing.T) {
+	avl := NewAVLTree()
 
-	sl.Put([]byte("name"), "zhang san")
-	v := sl.Get([]byte("name"))
+	avl.Put([]byte("name"), "zhang san")
+	v := avl.Get([]byte("name"))
 
 	assert.Equal(t, "zhang san", v)
 }
 
-func TestSkipList_2(t *testing.T) {
+func TestAVLTree_2(t *testing.T) {
 	sl := NewSkipList()
 
 	sl.Put([]byte("name"), "zhang san")
@@ -48,7 +48,7 @@ func TestSkipList_2(t *testing.T) {
 	assert.Equal(t, "li si", v)
 }
 
-func TestSkipList_3(t *testing.T) {
+func TestAVLTree_3(t *testing.T) {
 	sl := NewSkipList()
 
 	sl.Put([]byte("name"), "zhang san")
@@ -59,7 +59,7 @@ func TestSkipList_3(t *testing.T) {
 }
 
 // exception test
-func TestSkipList_4(t *testing.T) {
+func TestAVLTree_4(t *testing.T) {
 	sl := NewSkipList()
 
 	sl.Put([]byte("a"), "1")
@@ -71,7 +71,7 @@ func TestSkipList_4(t *testing.T) {
 }
 
 // test random option
-func TestSkipList_5(t *testing.T) {
+func TestAVLTree_5(t *testing.T) {
 	sl := NewSkipList()
 
 	// store expect value
@@ -103,26 +103,30 @@ func TestSkipList_5(t *testing.T) {
 	}
 }
 
-func TestSkipListUse(t *testing.T) {
-	sl := NewSkipList()
-	sl.Put([]byte("1"), "a")
-	sl.Put([]byte("2"), "b")
-	sl.Put([]byte("3"), "c")
-	sl.Put([]byte("4"), "d")
-	sl.Put([]byte("5"), "e")
-	PrintSkipList(sl)
+func TestAVLTreeUse(t *testing.T) {
+	avl := NewAVLTree()
+	avl.Put([]byte("1"), "a")
+	avl.Put([]byte("2"), "b")
+	avl.Put([]byte("3"), "c")
+	avl.Put([]byte("4"), "d")
+	avl.Put([]byte("5"), "e")
+	PrintAVLTree(avl.root)
 }
 
-func PrintSkipList(sl *SkipList) {
-	for i := sl.level - 1; i >= 0; i-- {
-		x := sl.header
-		for x != nil {
-			x = x.next[i]
-			if x != nil {
-				fmt.Printf("%v-%v ", string(x.key), x.value)
+func PrintAVLTree(root *aVLTreeNode) {
+	if root != nil {
+		fmt.Printf("%v-%v", string(root.key), root.value)
+		if root.left != nil || root.right != nil {
+			fmt.Printf("(")
+			if root.left != nil {
+				PrintAVLTree(root.left)
 			}
+			fmt.Printf(", ")
+			if root.right != nil {
+				PrintAVLTree(root.right)
+			}
+			fmt.Printf(")")
 		}
-		fmt.Println()
 	}
 }
 
@@ -130,37 +134,38 @@ func PrintSkipList(sl *SkipList) {
 	benchmark test
 */
 
-func PrepareSL() *SkipList {
-	sl := NewSkipList()
+func PrepareAVL() *AVLTree {
+	avl := NewAVLTree()
 
 	put := 0
 	rem := 1
 
 	rand.Seed(time.Now().UnixNano())
 
-	for i := 0; i < 5000; i++ {
+	for i := 0; i < 50000; i++ {
 		opt := rand.Intn(2)
 		k := rand.Intn(100)
 		v := rand.Intn(100)
 		switch opt {
 		case put:
-			sl.Put([]byte(strconv.Itoa(k)), v)
+			avl.Put([]byte(strconv.Itoa(k)), v)
 		case rem:
-			sl.Remove([]byte(strconv.Itoa(k)))
+			avl.Remove([]byte(strconv.Itoa(k)))
 		}
 	}
 
-	return sl
+	return avl
 }
 
 //goos: darwin
 //goarch: arm64
 //pkg: CaskDB/ds
-//BenchmarkSkipList_Get-8         18686070                61.38 ns/op            7 B/op          0 allocs/op
+//BenchmarkAVLTree_Get-8          16574833                63.59 ns/op            7 B/op          0 allocs/op
 //PASS
-//ok      CaskDB/ds       1.476s
+//ok      CaskDB/ds       1.335s
 
-func BenchmarkSkipList_Get(b *testing.B) {
+// in my test, the fastest is 58s and the slowest is 68s, this is unstable
+func BenchmarkAVLTree_Get(b *testing.B) {
 	sl := PrepareSL()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -171,11 +176,11 @@ func BenchmarkSkipList_Get(b *testing.B) {
 //goos: darwin
 //goarch: arm64
 //pkg: CaskDB/ds
-//BenchmarkSkipList_Put-8            66636             17928 ns/op             101 B/op          4 allocs/op
+//BenchmarkAVLTree_Put-8             68772             17792 ns/op             101 B/op          4 allocs/op
 //PASS
-//ok      CaskDB/ds       1.613s
+//ok      CaskDB/ds       1.580s
 
-func BenchmarkSkipList_Put(b *testing.B) {
+func BenchmarkAVLTree_Put(b *testing.B) {
 	sl := PrepareSL()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -186,11 +191,11 @@ func BenchmarkSkipList_Put(b *testing.B) {
 //goos: darwin
 //goarch: arm64
 //pkg: CaskDB/ds
-//BenchmarkSkipList_Remove-8      39297234                31.07 ns/op            7 B/op          0 allocs/op
+//BenchmarkAVLTree_Remove-8       36373234                31.30 ns/op            7 B/op          0 allocs/op
 //PASS
-//ok      CaskDB/ds       1.511s
+//ok      CaskDB/ds       1.402s
 
-func BenchmarkSkipList_Remove(b *testing.B) {
+func BenchmarkAVLTree_Remove(b *testing.B) {
 	sl := PrepareSL()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

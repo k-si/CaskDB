@@ -1,7 +1,7 @@
-package Adele
+package CaskDB
 
 import (
-	"Adele/ds"
+	"CaskDB/ds"
 	"sync"
 )
 
@@ -70,11 +70,11 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 func (db *DB) getVal(key []byte) ([]byte, error) {
 
 	// get index and find value from disk
-	n := db.strIndex.idx.Get(key)
-	if n == nil {
+	v := db.strIndex.idx.Get(key)
+	if v == nil {
 		return nil, ErrorKeyNotExist
 	}
-	idx := n.Value().(*Index)
+	idx := v.(*Index)
 
 	// find entry from disk
 	f := db.activeFiles[String]

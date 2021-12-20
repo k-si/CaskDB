@@ -1,7 +1,7 @@
-package test
+package db_test
 
 import (
-	"Adele"
+	"CaskDB"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"os"
@@ -9,10 +9,10 @@ import (
 )
 
 func Test_Set_Get(t *testing.T) {
-	os.RemoveAll("/tmp/AdeleDB")
+	os.RemoveAll("/tmp/CaskDB")
 
 	for i := 0; i < 3; i++ {
-		db, err := Adele.Open(Adele.DefaultConfig())
+		db, err := CaskDB.Open(CaskDB.DefaultConfig())
 		assert.Nil(t, err)
 
 		// 1%2=1 2%2=0 3%2=1, so we can test the repetitive kv
@@ -30,12 +30,12 @@ func Test_Set_Get(t *testing.T) {
 }
 
 func Test_Set_Remove(t *testing.T) {
-	os.RemoveAll("/tmp/AdeleDB")
+	os.RemoveAll("/tmp/CaskDB")
 
 	for i := 0; i < 2; i++ {
 		if i == 0 {
 			// first set remove
-			db, err := Adele.Open(Adele.DefaultConfig())
+			db, err := CaskDB.Open(CaskDB.DefaultConfig())
 			assert.Nil(t, err)
 
 			k, v := []byte("key"), []byte("value")
@@ -46,19 +46,19 @@ func Test_Set_Remove(t *testing.T) {
 			assert.Nil(t, err)
 
 			dest, err := db.Get(v)
-			assert.Equal(t, Adele.ErrorKeyNotExist, err)
+			assert.Equal(t, CaskDB.ErrorKeyNotExist, err)
 			assert.Nil(t, dest)
 
 			err = db.Close()
 			assert.Nil(t, err)
 		} else {
 			// second get
-			db, err := Adele.Open(Adele.DefaultConfig())
+			db, err := CaskDB.Open(CaskDB.DefaultConfig())
 			assert.Nil(t, err)
 
 			v, err := db.Get([]byte("key"))
 			assert.Nil(t, v)
-			assert.Equal(t, Adele.ErrorKeyNotExist, err)
+			assert.Equal(t, CaskDB.ErrorKeyNotExist, err)
 		}
 	}
 }

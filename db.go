@@ -1,7 +1,7 @@
-package Adele
+package CaskDB
 
 import (
-	"Adele/util"
+	"CaskDB/util"
 	"errors"
 	"io/ioutil"
 	"log"
@@ -389,8 +389,7 @@ func (db *DB) storeMerged(e *Entry, archedFiles map[uint32]*File, activeFile **F
 	// todo: other types
 	switch e.GetDataType() {
 	case String:
-		item := db.strIndex.idx.Get(e.key)
-		idx := item.Value().(*Index)
+		idx := db.strIndex.idx.Get(e.key).(*Index)
 		idx.fileId = (*activeFile).id
 		idx.offset = (*activeFile).offset - int64(e.Size())
 		db.strIndex.idx.Put(e.key, idx)

@@ -1,7 +1,7 @@
-package Adele
+package CaskDB
 
 import (
-	"Adele/util"
+	"CaskDB/util"
 	"log"
 	"os"
 	"sort"
@@ -189,11 +189,11 @@ func (db *DB) entryValid(e *Entry, eFid uint32, eOffset int64) bool {
 		if e.GetMarkType() == StringSet {
 
 			// entry is valid, if key, file id, offset all equals index
-			n := db.strIndex.idx.Get(e.key)
-			if n == nil {
+			v := db.strIndex.idx.Get(e.key)
+			if v == nil {
 				return false
 			}
-			idx := n.Value().(*Index)
+			idx := v.(*Index)
 			if eFid == idx.fileId && eOffset == idx.offset {
 				return true
 			}

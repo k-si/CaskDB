@@ -1,4 +1,4 @@
-module Adele
+module CaskDB
 
 go 1.16
 
