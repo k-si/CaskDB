@@ -20,7 +20,7 @@ func NewStrIndex() *StrIndex {
 func (db *DB) Set(key, value []byte) error {
 
 	// check kv size, make sure the size is within the range
-	if err := db.checkSize(key, value); err != nil {
+	if err := db.checkSize(key, nil, value); err != nil {
 		return err
 	}
 
@@ -35,7 +35,7 @@ func (db *DB) Set(key, value []byte) error {
 
 // set kv in disk and memory
 func (db *DB) setVal(key, value []byte) error {
-	e := NewEntry(key, value, String, StringSet)
+	e := NewEntry(key, value, String, StringSet, 0)
 
 	// write to disk in entry
 	if err := db.StoreFile(e); err != nil {
@@ -43,9 +43,14 @@ func (db *DB) setVal(key, value []byte) error {
 	}
 
 	// write to memory index
-	if err := db.StoreStrIndex(e); err != nil {
-		return err
+	f := db.activeFiles[String]
+	idx := &Index{
+		//valueSize: e.valueSize,
+		fileId:    f.id,
+		offset:    f.offset - int64(e.Size()), // offset is the entry start position
 	}
+	db.strIndex.idx.Put(e.key, idx)
+
 	return nil
 }
 
@@ -59,11 +64,11 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	db.strIndex.mu.RLock()
 	defer db.strIndex.mu.RUnlock()
 
-	value, err := db.getVal(key)
+	v, err := db.getVal(key)
 	if err != nil {
 		return nil, err
 	}
-	return value, nil
+	return v, nil
 }
 
 // get key from Adele
@@ -76,21 +81,12 @@ func (db *DB) getVal(key []byte) ([]byte, error) {
 	}
 	idx := v.(*Index)
 
-	// find entry from disk
-	f := db.activeFiles[String]
-	if f.id != idx.fileId {
-		af, err := db.getArchedFile(String, idx.fileId)
-		if err != nil {
-			return nil, err
-		}
-		f = af
-	}
-	e, err := f.Read(idx.offset)
+	// read value by index
+	val, err := db.readValue(String, idx)
 	if err != nil {
 		return nil, err
 	}
-
-	return e.value, nil
+	return val, nil
 }
 
 func (db *DB) Remove(key []byte) error {
@@ -111,7 +107,7 @@ func (db *DB) Remove(key []byte) error {
 
 // remove a kv from memory and disk
 func (db *DB) removeVal(key []byte) error {
-	e := NewEntry(key, nil, String, StringRemove)
+	e := NewEntry(key, nil, String, StringRemove, 0)
 
 	// append write entry, type of remove
 	if err := db.StoreFile(e); err != nil {

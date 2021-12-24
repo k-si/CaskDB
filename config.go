@@ -4,9 +4,9 @@ import "time"
 
 const (
 	DefaultDBDir         = "/tmp/CaskDB"
-	DefaultMaxKeySize    = 1024 * 1024      // 1mb
-	DefaultMaxValueSize  = 8 * 1024 * 1024  // 8mb
-	DefaultMaxFileSize   = 16 * 1024 * 1024 // 16mb
+	DefaultMaxKeySize    = 1 * 1024        // 1kb
+	DefaultMaxValueSize  = 8 * 1024        // 8kb
+	DefaultMaxFileSize   = 1 * 1024 * 1024 // 1mb
 	DefaultMergeInterval = 24 * time.Hour
 	DefaultWriteSync     = false
 	DefaultMultiThread   = false

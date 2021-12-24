@@ -1,18 +1,17 @@
-package db_test
+package CaskDB
 
 import (
-	"CaskDB"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 )
 
-func Test_Set_Get(t *testing.T) {
+func TestStrSetGet(t *testing.T) {
 	os.RemoveAll("/tmp/CaskDB")
 
 	for i := 0; i < 3; i++ {
-		db, err := CaskDB.Open(CaskDB.DefaultConfig())
+		db, err := Open(DefaultConfig())
 		assert.Nil(t, err)
 
 		// 1%2=1 2%2=0 3%2=1, so we can test the repetitive kv
@@ -29,13 +28,13 @@ func Test_Set_Get(t *testing.T) {
 	}
 }
 
-func Test_Set_Remove(t *testing.T) {
+func TestStrSetRemove(t *testing.T) {
 	os.RemoveAll("/tmp/CaskDB")
 
 	for i := 0; i < 2; i++ {
 		if i == 0 {
 			// first set remove
-			db, err := CaskDB.Open(CaskDB.DefaultConfig())
+			db, err := Open(DefaultConfig())
 			assert.Nil(t, err)
 
 			k, v := []byte("key"), []byte("value")
@@ -45,20 +44,20 @@ func Test_Set_Remove(t *testing.T) {
 			err = db.Remove(k)
 			assert.Nil(t, err)
 
-			dest, err := db.Get(v)
-			assert.Equal(t, CaskDB.ErrorKeyNotExist, err)
+			dest, err := db.Get(k)
+			assert.Equal(t, ErrorKeyNotExist, err)
 			assert.Nil(t, dest)
 
 			err = db.Close()
 			assert.Nil(t, err)
 		} else {
 			// second get
-			db, err := CaskDB.Open(CaskDB.DefaultConfig())
+			db, err := Open(DefaultConfig())
 			assert.Nil(t, err)
 
 			v, err := db.Get([]byte("key"))
 			assert.Nil(t, v)
-			assert.Equal(t, CaskDB.ErrorKeyNotExist, err)
+			assert.Equal(t, ErrorKeyNotExist, err)
 		}
 	}
 }

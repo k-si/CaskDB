@@ -2,22 +2,22 @@ package CaskDB
 
 import (
 	"CaskDB/util"
+	"io/ioutil"
 	"log"
 	"os"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-func (db *DB) gc() {
+func (db *DB) listeningGC() {
 	timer := time.NewTimer(db.config.MergeInterval)
 	defer timer.Stop()
 
 	select {
 	case <-timer.C:
 		timer.Reset(db.config.MergeInterval)
-		if err := db.StartMerge(); err != nil {
+		if err := db.GC(); err != nil {
 			log.Println("[merge err]", err)
 			return
 		}
@@ -27,7 +27,7 @@ func (db *DB) gc() {
 // garbage file recycling
 // merge all files and remove useless data
 // todo: backpack and rollback
-func (db *DB) StartMerge() error {
+func (db *DB) GC() error {
 
 	// check status
 	if atomic.LoadUint32(&db.isClosed) == 1 {
@@ -39,7 +39,9 @@ func (db *DB) StartMerge() error {
 
 	log.Println("[stop the world]")
 	db.strIndex.mu.Lock()
+	db.hashIndex.mu.Lock()
 	defer db.strIndex.mu.Unlock()
+	defer db.hashIndex.mu.Unlock()
 	// todo: lock every index lock
 
 	// change status
@@ -75,30 +77,25 @@ func (db *DB) StartMerge() error {
 
 			ids := fids[i] // all files with this type
 
-			// only merge arched file
-			if len(ids) < 2 {
-				return
-			}
-
 			mergedArchedFiles := make(map[uint32]*File)
 			var mergedActiveFile *File
 
-			// one type
-			// 0 - (n-2) is arched file
-			sort.Ints(ids)
-			for j := 0; j < len(ids)-1; j++ {
+			for j := 0; j < len(ids); j++ {
 				select {
 				case <-db.mergeChan:
 					log.Println("[exit merge task]", i)
 					return
 				default:
-					f, err := db.getArchedFile(uint16(i), uint32(ids[j]))
+					f, err := db.getFileById(uint16(i), uint32(ids[j]))
 					if err != nil {
 						return
 					}
 
-					// read all entry from files
+					// read all entry from files, but except empty file
 					var offset int64
+					if offset == f.offset {
+						continue
+					}
 					for offset < f.offset {
 						e, err := f.Read(offset)
 						if err != nil {
@@ -119,7 +116,7 @@ func (db *DB) StartMerge() error {
 					}
 
 					// close and remove old file
-					if mergeErr = f.Close(false); mergeErr != nil {
+					if mergeErr = f.Close(true); mergeErr != nil {
 						return
 					}
 					if mergeErr = os.Remove(f.fd.Name()); mergeErr != nil {
@@ -132,13 +129,18 @@ func (db *DB) StartMerge() error {
 				mergeErr = ErrorNilMergedFile
 				return
 			}
-			mergedArchedFiles[mergedActiveFile.id] = mergedActiveFile
+			db.activeFiles[i] = mergedActiveFile
 			db.archedFiles[i] = mergedArchedFiles
 
 			// rename new merged file
+			fi, _ := mergedActiveFile.fd.Stat()
+			name := PathSeparator + fi.Name()
+			if mergeErr = os.Rename(mergePath+name, db.config.DBDir+name); mergeErr != nil {
+				return
+			}
 			for _, f := range db.archedFiles[i] {
-				fi, _ := f.fd.Stat()
-				name := PathSeparator + fi.Name()
+				fi, _ = f.fd.Stat()
+				name = PathSeparator + fi.Name()
 				if mergeErr = os.Rename(mergePath+name, db.config.DBDir+name); mergeErr != nil {
 					return
 				}
@@ -159,7 +161,7 @@ func (db *DB) StartMerge() error {
 	return nil
 }
 
-func (db *DB) StopGc() error {
+func (db *DB) StopGC() error {
 
 	// check status
 	if atomic.LoadUint32(&db.isClosed) == 1 {
@@ -177,8 +179,24 @@ func (db *DB) StopGc() error {
 	return nil
 }
 
+// clear the files in merged directory
+func (db *DB) removeMergedFiles() error {
+	mergedPath := db.config.DBDir + PathSeparator + MergeDirName
+	mInfos, err := ioutil.ReadDir(mergedPath)
+	if err != nil {
+		return err
+	}
+	for _, mi := range mInfos {
+		fp := mergedPath + PathSeparator + mi.Name()
+		if err := os.Remove(fp); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // todo: other types
-// while merging, need 'set' type of entry, 'remove' type is useless
+// while merging, need 'set' or 'update' type of entry, 'remove' type is useless
 func (db *DB) entryValid(e *Entry, eFid uint32, eOffset int64) bool {
 	if e == nil {
 		return false
@@ -190,15 +208,92 @@ func (db *DB) entryValid(e *Entry, eFid uint32, eOffset int64) bool {
 
 			// entry is valid, if key, file id, offset all equals index
 			v := db.strIndex.idx.Get(e.key)
-			if v == nil {
-				return false
-			}
-			idx := v.(*Index)
-			if eFid == idx.fileId && eOffset == idx.offset {
-				return true
-			}
+			return db.checkPosition(v, eFid, eOffset)
+		}
+	case List:
+		mt := e.GetMarkType()
+		if mt == ListLPush || mt == ListRPush {
+			record := db.listIndex.idx.GetRecord()
+			v := LIdxGet(record, string(e.key), e.value)
+			return db.checkPosition(v, eFid, eOffset)
+		}
+	case Hash:
+		if e.GetMarkType() == HashHSet {
+			v := db.hashIndex.idx.Get(e.GetPreKey(), e.GetPostKey())
+			return db.checkPosition(v, eFid, eOffset)
 		}
 	}
 
 	return false
+}
+
+func (db *DB) checkPosition(v interface{}, eFid uint32, eOffset int64) bool {
+	if v == nil {
+		return false
+	}
+	idx := v.(*Index)
+	if eFid == idx.fileId && eOffset == idx.offset {
+		return true
+	}
+	return false
+}
+
+// store entry in merged files
+// we should use *activeFile
+func (db *DB) storeMerged(e *Entry, archedFiles map[uint32]*File, activeFile **File) error {
+	mergePath := db.config.DBDir + PathSeparator + MergeDirName
+
+	// init
+	if (*activeFile) == nil {
+		f, err := NewFile(mergePath, 0, e.GetDataType(), db.config.MaxFileSize)
+		if err != nil {
+			return err
+		}
+		*activeFile = f
+	}
+
+	// check active file size
+	if (*activeFile).offset+int64(e.Size()) > db.config.MaxFileSize {
+
+		// flush current active file to disk
+		if err := (*activeFile).Sync(); err != nil {
+			return err
+		}
+
+		// create new file as active file
+		newId := (*activeFile).id + 1
+		newf, err := NewFile(mergePath, newId, e.GetDataType(), db.config.MaxFileSize)
+		if err != nil {
+			return err
+		}
+		archedFiles[(*activeFile).id] = *activeFile
+		*activeFile = newf
+	}
+
+	// write entry in active file
+	if err := (*activeFile).Write(e); err != nil {
+		return err
+	}
+
+	// update indexes
+	// todo: other types
+	switch e.GetDataType() {
+	case String:
+		idx := db.strIndex.idx.Get(e.key).(*Index)
+		idx.fileId = (*activeFile).id
+		idx.offset = (*activeFile).offset - int64(e.Size())
+	case List:
+		// do noting...
+	case Hash:
+		idx := db.hashIndex.idx.Get(e.GetPreKey(), e.GetPostKey()).(*Index)
+		idx.fileId = (*activeFile).id
+		idx.offset = (*activeFile).offset - int64(e.Size())
+	}
+
+	// sync buffer with disk
+	if err := (*activeFile).Sync(); err != nil {
+		return err
+	}
+
+	return nil
 }

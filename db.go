@@ -2,6 +2,7 @@ package CaskDB
 
 import (
 	"CaskDB/util"
+	"bytes"
 	"errors"
 	"io/ioutil"
 	"log"
@@ -9,7 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 )
 
@@ -31,7 +31,7 @@ var (
 const (
 	MergeDirName  = "merged"
 	PathSeparator = string(os.PathSeparator)
-	DataTypeNum = 5
+	DataTypeNum   = 5
 )
 
 type DB struct {
@@ -40,6 +40,9 @@ type DB struct {
 	activeFiles []*File            // activeFiles[dataType] = file
 	archedFiles []map[uint32]*File // archedFiles[dataType] = fileId -> file
 	strIndex    *StrIndex
+	listIndex   *ListIndex
+	hashIndex   *HashIndex
+	setIndex    *SetIndex
 
 	isMerging uint32 // 0: not merge 1: merging
 	isClosed  uint32 // 0: not close 1: closed
@@ -62,6 +65,9 @@ func Open(config Config) (*DB, error) {
 	db := &DB{
 		config:    config,
 		strIndex:  NewStrIndex(),
+		listIndex: NewListIndex(),
+		hashIndex: NewHashIndex(),
+		setIndex:  NewSetIndex(),
 		mergeChan: make(chan struct{}, DataTypeNum),
 	}
 
@@ -82,11 +88,10 @@ func Open(config Config) (*DB, error) {
 	}
 
 	// start timed merge goroutine
-	go db.gc()
+	go db.listeningGC()
 
 	return db, nil
 }
-
 
 func (db *DB) Close() error {
 
@@ -95,7 +100,7 @@ func (db *DB) Close() error {
 		return ErrorClosedDB
 	}
 	if atomic.LoadUint32(&db.isMerging) == 1 {
-		if err := db.StopGc(); err != nil {
+		if err := db.StopGC(); err != nil {
 			return err
 		}
 	}
@@ -115,94 +120,6 @@ func (db *DB) Close() error {
 	}
 
 	atomic.StoreUint32(&db.isClosed, 1)
-
-	return nil
-}
-
-// traverse all the content of files, modify the index in memory
-// according to the data operation type
-func (db *DB) loadIndexes(fids map[int][]int) (err error) {
-	var loadErr error
-
-	wg := sync.WaitGroup{}
-
-	// every goroutine do its type
-	for i := 0; i < DataTypeNum; i++ {
-		wg.Add(1)
-
-		go func(i int) {
-			defer wg.Done()
-
-			ids := fids[i]
-
-			// traverse arched files
-			for j := 0; j < len(ids)-1; j++ {
-				af, err := db.getArchedFile(uint16(i), uint32(ids[j]))
-				if err != nil {
-					loadErr = err
-					return
-				}
-				if err := db.loadFileIndexes(af); err != nil {
-					loadErr = err
-					return
-				}
-			}
-
-			// traverse active files
-			f := db.activeFiles[i]
-			if err := db.loadFileIndexes(f); err != nil {
-				loadErr = err
-				return
-			}
-		}(i)
-	}
-
-	wg.Wait()
-
-	if loadErr != nil {
-		return loadErr
-	}
-
-	return
-}
-
-func (db *DB) loadFileIndexes(f *File) error {
-
-	// there may be no files at the beginning
-	// Pay attention to null pointers when loading
-	if f != nil {
-
-		var offset int64
-
-		// read entry from file
-		for offset < db.config.MaxFileSize {
-			if e, err := f.Read(offset); err == nil {
-				idx := &Index{
-					valueSize: e.valueSize,
-					fileId:    f.id,
-					offset:    offset,
-				}
-
-				// different data types correspond to different index types
-				// todo: other types
-				switch e.GetDataType() {
-				case String:
-					db.buildStrIndex(e, idx)
-				}
-				offset += int64(e.Size())
-			} else if err == ErrorEmptyHeader {
-
-				// the file is full of 0
-				// reading an empty header means reading to the end
-				f.offset = offset
-
-				// read to end, then break
-				break
-			} else {
-				return err
-			}
-		}
-	}
 
 	return nil
 }
@@ -286,30 +203,6 @@ func loadFilesId(dir string) (map[int][]int, error) {
 	return dataTypeIds, nil
 }
 
-func (db *DB) getArchedFile(dataType uint16, fileId uint32) (*File, error) {
-	f, ok := db.archedFiles[dataType][fileId]
-	if !ok {
-		return nil, ErrorNotInArch
-	}
-	return f, nil
-}
-
-// clear the files in merged directory
-func (db *DB) removeMergedFiles() error {
-	mergedPath := db.config.DBDir + PathSeparator + MergeDirName
-	mInfos, err := ioutil.ReadDir(mergedPath)
-	if err != nil {
-		return err
-	}
-	for _, mi := range mInfos {
-		fp := mergedPath + PathSeparator + mi.Name()
-		if err := os.Remove(fp); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // write entry to disk
 func (db *DB) StoreFile(e *Entry) error {
 	f := db.activeFiles[e.GetDataType()]
@@ -348,72 +241,80 @@ func (db *DB) StoreFile(e *Entry) error {
 	return nil
 }
 
-// store entry in merged files
-// we should use *activeFile
-func (db *DB) storeMerged(e *Entry, archedFiles map[uint32]*File, activeFile **File) error {
-	mergePath := db.config.DBDir + PathSeparator + MergeDirName
-
-	// init
-	if (*activeFile) == nil {
-		f, err := NewFile(mergePath, 0, e.GetDataType(), db.config.MaxFileSize)
-		if err != nil {
-			return err
-		}
-		*activeFile = f
-	}
-
-	// check active file size
-	if (*activeFile).offset+int64(e.Size()) > db.config.MaxFileSize {
-
-		// flush current active file to disk
-		if err := (*activeFile).Sync(); err != nil {
-			return err
-		}
-
-		// create new file as active file
-		newId := (*activeFile).id + 1
-		newf, err := NewFile(mergePath, newId, e.GetDataType(), db.config.MaxFileSize)
-		if err != nil {
-			return err
-		}
-		archedFiles[(*activeFile).id] = *activeFile
-		*activeFile = newf
-	}
-
-	// write entry in active file
-	if err := (*activeFile).Write(e); err != nil {
+// check size
+func (db *DB) checkSize(key, k []byte, v ...[]byte) error {
+	if err := db.checkKeySize(key); err != nil {
 		return err
 	}
-
-	// update indexes
-	// todo: other types
-	switch e.GetDataType() {
-	case String:
-		idx := db.strIndex.idx.Get(e.key).(*Index)
-		idx.fileId = (*activeFile).id
-		idx.offset = (*activeFile).offset - int64(e.Size())
-		db.strIndex.idx.Put(e.key, idx)
-	}
-
-	// sync buffer with disk
-	if err := (*activeFile).Sync(); err != nil {
+	if err := db.checkKeySize(k); err != nil {
 		return err
 	}
-
+	for _, i := range v {
+		if err := db.checkValSize(i); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
-func (db *DB) checkSize(k, v []byte) error {
-	if k != nil {
-		if len(k) == 0 {
+func (db *DB) checkKeySize(key []byte) error {
+	if key != nil {
+		if len(key) == 0 {
 			return ErrorKeyEmpty
 		}
-		if uint32(len(k)) > db.config.MaxKeySize {
+		if uint32(len(key)) > db.config.MaxKeySize {
 			return ErrorKeySizeLimit
 		}
 	}
-	if v != nil && uint32(len(v)) > db.config.MaxValueSize {
-		return ErrorValueSizeLimit
+	return nil
+}
+
+func (db *DB) checkValSize(val []byte) error {
+	if val != nil {
+		if uint32(len(val)) > db.config.MaxValueSize {
+			return ErrorValueSizeLimit
+		}
 	}
 	return nil
+}
+
+// splice two bytes in a []byte
+func (db *DB) splice(k1, k2 []byte) []byte {
+	var buf bytes.Buffer
+	buf.Write(k1)
+	buf.Write(k2)
+	return buf.Bytes()
+}
+
+func (db *DB) getArchedFile(dataType uint16, fileId uint32) (*File, error) {
+	f, ok := db.archedFiles[dataType][fileId]
+	if !ok {
+		return nil, ErrorNotInArch
+	}
+	return f, nil
+}
+
+func (db *DB) getFileById(dataType uint16, fileId uint32) (*File, error) {
+	f := db.activeFiles[dataType]
+	if f.id != fileId {
+		af, err := db.getArchedFile(dataType, fileId)
+		if err != nil {
+			return nil, err
+		}
+		f = af
+	}
+	return f, nil
+}
+
+func (db *DB) readValue(dataType uint16, idx *Index) ([]byte, error) {
+	f, err := db.getFileById(dataType, idx.fileId)
+	if err != nil {
+		return nil, err
+	}
+
+	val, err := f.ReadValue(idx.offset)
+	if err != nil {
+		return nil, err
+	}
+	return val, nil
 }

@@ -39,7 +39,7 @@ func newAVLNode(key []byte, value interface{}, left, right *aVLTreeNode) *aVLTre
 	return &aVLTreeNode{
 		key:    key,
 		value:  value,
-		height: 1,
+		height: 0,
 		left:   left,
 		right:  right,
 	}
@@ -208,7 +208,7 @@ func leftRightRotation(n *aVLTreeNode) *aVLTreeNode {
 // 获取节点高度
 func getHeight(n *aVLTreeNode) int {
 	if n == nil {
-		return 0
+		return -1
 	}
 	return max(getHeight(n.left), getHeight(n.right)) + 1
 }
