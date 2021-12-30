@@ -2,6 +2,7 @@ package CaskDB
 
 import (
 	"CaskDB/util"
+	"bytes"
 	"io/ioutil"
 	"log"
 	"os"
@@ -15,6 +16,8 @@ func (db *DB) listeningGC() {
 	defer timer.Stop()
 
 	select {
+	case <-db.listenChan:
+		break
 	case <-timer.C:
 		timer.Reset(db.config.MergeInterval)
 		if err := db.GC(); err != nil {
@@ -40,9 +43,14 @@ func (db *DB) GC() error {
 	log.Println("[stop the world]")
 	db.strIndex.mu.Lock()
 	db.hashIndex.mu.Lock()
+	db.listIndex.mu.Lock()
+	db.setIndex.mu.Lock()
+	db.zsetIndex.mu.Lock()
 	defer db.strIndex.mu.Unlock()
 	defer db.hashIndex.mu.Unlock()
-	// todo: lock every index lock
+	defer db.listIndex.mu.Unlock()
+	defer db.setIndex.mu.Unlock()
+	defer db.zsetIndex.mu.Unlock()
 
 	// change status
 	atomic.StoreUint32(&db.isMerging, 1)
@@ -168,6 +176,11 @@ func (db *DB) StopGC() error {
 		return ErrorClosedDB
 	}
 
+	if atomic.LoadUint32(&db.isMerging) == 0 {
+		db.listenChan <- struct{}{}
+		return nil
+	}
+
 	// channel notify
 	if atomic.LoadUint32(&db.isMerging) == 1 {
 		go func() {
@@ -195,46 +208,70 @@ func (db *DB) removeMergedFiles() error {
 	return nil
 }
 
-// todo: other types
 // while merging, need 'set' or 'update' type of entry, 'remove' type is useless
 func (db *DB) entryValid(e *Entry, eFid uint32, eOffset int64) bool {
 	if e == nil {
 		return false
 	}
 
-	switch e.GetDataType() {
-	case String:
-		if e.GetMarkType() == StringSet {
+	dt := e.GetDataType()
+	mt := e.GetMarkType()
+	switch dt {
+	case Str:
+		if mt == StrSet {
 
 			// entry is valid, if key, file id, offset all equals index
 			v := db.strIndex.idx.Get(e.key)
-			return db.checkPosition(v, eFid, eOffset)
+			if v == nil {
+				return false
+			}
+			idx := v.(*Index)
+			if eFid == idx.fileId && eOffset == idx.offset {
+				return true
+			}
+			return false
 		}
 	case List:
-		mt := e.GetMarkType()
-		if mt == ListLPush || mt == ListRPush {
-			record := db.listIndex.idx.GetRecord()
-			v := LIdxGet(record, string(e.key), e.value)
-			return db.checkPosition(v, eFid, eOffset)
-		}
+		/*
+			todo: here have a bug, the uniqueness of element cannot be determined.
+			todo: in order to ensure the correctness of the data, the list data will not be garbage collected for the time being
+		*/
+		//if mt == ListLPush || mt == ListRPush {
+		//	if db.listIndex.idx.ValExist(string(e.key), e.value) {
+		//		return true
+		//	}
+		//} else if mt == ListLSet || mt == ListLInsertBefore || mt == ListLInsertAfter {
+		//	if db.listIndex.idx.ValExist(e.GetPreKey(), e.value) {
+		//		return true
+		//	}
+		//}
 	case Hash:
-		if e.GetMarkType() == HashHSet {
+		if mt == HashHSet {
 			v := db.hashIndex.idx.Get(e.GetPreKey(), e.GetPostKey())
-			return db.checkPosition(v, eFid, eOffset)
+			if v != nil {
+				return bytes.Compare(e.value, v) == 0
+			}
+		}
+	case Set:
+		if mt == SetSAdd {
+			if db.setIndex.idx.ValExist(string(e.key), string(e.value)) {
+				return true
+			}
+		} else if mt == SetSMove {
+			if db.setIndex.idx.ValExist(e.GetPostKey(), string(e.value)) {
+				return true
+			}
+		}
+	case ZSet:
+		if mt == ZSetZAdd {
+			score1 := util.BytesToFloat64(e.GetPostBytesKey())
+			ok, score2 := db.zsetIndex.idx.GetScore(e.GetPreKey(), string(e.value))
+			if ok && score1 == score2 {
+				return true
+			}
 		}
 	}
 
-	return false
-}
-
-func (db *DB) checkPosition(v interface{}, eFid uint32, eOffset int64) bool {
-	if v == nil {
-		return false
-	}
-	idx := v.(*Index)
-	if eFid == idx.fileId && eOffset == idx.offset {
-		return true
-	}
 	return false
 }
 
@@ -275,17 +312,11 @@ func (db *DB) storeMerged(e *Entry, archedFiles map[uint32]*File, activeFile **F
 		return err
 	}
 
-	// update indexes
-	// todo: other types
+	// update str indexes. list, hash, set, zset exist in memory,
+	// they dont have to update index
 	switch e.GetDataType() {
-	case String:
+	case Str:
 		idx := db.strIndex.idx.Get(e.key).(*Index)
-		idx.fileId = (*activeFile).id
-		idx.offset = (*activeFile).offset - int64(e.Size())
-	case List:
-		// do noting...
-	case Hash:
-		idx := db.hashIndex.idx.Get(e.GetPreKey(), e.GetPostKey()).(*Index)
 		idx.fileId = (*activeFile).id
 		idx.offset = (*activeFile).offset - int64(e.Size())
 	}

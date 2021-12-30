@@ -20,7 +20,10 @@ func NewHashIndex() *HashIndex {
 func (db *DB) HSet(key, k, v []byte) error {
 
 	// check size
-	if err := db.checkSize(key, k, v); err != nil {
+	if err := db.checkKeysSize(key, k); err != nil {
+		return err
+	}
+	if err := db.checkValSize(v); err != nil {
 		return err
 	}
 
@@ -47,12 +50,7 @@ func (db *DB) hSetVal(key, k, v []byte) error {
 	}
 
 	// store index
-	f := db.activeFiles[Hash]
-	idx := &Index{
-		fileId: f.id,
-		offset: f.offset - int64(e.Size()),
-	}
-	db.hashIndex.idx.Put(string(key), string(k), idx)
+	db.hashIndex.idx.Put(string(key), string(k), v)
 
 	return nil
 }
@@ -60,7 +58,7 @@ func (db *DB) hSetVal(key, k, v []byte) error {
 func (db *DB) HGet(key, k []byte) ([]byte, error) {
 
 	// check
-	if err := db.checkSize(key, k); err != nil {
+	if err := db.checkKeysSize(key, k); err != nil {
 		return nil, err
 	}
 
@@ -68,35 +66,16 @@ func (db *DB) HGet(key, k []byte) ([]byte, error) {
 	db.hashIndex.mu.RLock()
 	defer db.hashIndex.mu.RUnlock()
 
-	v, err := db.hGetVal(key, k)
-	if err != nil {
-		return nil, err
-	}
-	return v, nil
-}
-
-func (db *DB) hGetVal(key, k []byte) ([]byte, error) {
-
-	// find from index
 	v := db.hashIndex.idx.Get(string(key), string(k))
-	if v == nil {
-		return nil, ErrorKeyNotExist
-	}
-	idx := v.(*Index)
 
-	// get value by index
-	val, err := db.readValue(Hash, idx)
-	if err != nil {
-		return nil, err
-	}
-	return val, nil
+	return v, nil
 }
 
 func (db *DB) HDel(key, k []byte) error {
 
 	// check size
-	if err := db.checkSize(key, k); err != nil {
-		return nil
+	if err := db.checkKeysSize(key, k); err != nil {
+		return err
 	}
 
 	// lock
@@ -122,4 +101,54 @@ func (db *DB) hDelVal(key, k []byte) error {
 	// delete from index
 	db.hashIndex.idx.Remove(string(key), string(k))
 	return nil
+}
+
+func (db *DB) HSetNx(key, k, v []byte) error {
+
+	// check size
+	if err := db.checkKeysSize(key, k); err != nil {
+		return err
+	}
+	if err := db.checkValSize(v); err != nil {
+		return err
+	}
+
+	// lock
+	db.hashIndex.mu.Lock()
+	defer db.hashIndex.mu.Unlock()
+
+	val := db.hashIndex.idx.Get(string(key), string(k))
+	if val == nil {
+		if err := db.hSetVal(key, k, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (db *DB) HGetAll(key []byte) ([][]byte, error) {
+
+	// check size
+	if err := db.checkKeySize(key); err != nil {
+		return nil, err
+	}
+
+	// lock
+	db.hashIndex.mu.RLock()
+	defer db.hashIndex.mu.RUnlock()
+
+	res := db.hashIndex.idx.GetAll(string(key))
+	return res, nil
+}
+
+func (db *DB) HExist(key, k []byte) bool {
+	db.hashIndex.mu.RLock()
+	defer db.hashIndex.mu.RUnlock()
+	return db.hashIndex.idx.FieldExist(string(key), string(k))
+}
+
+func (db *DB) HLen(key []byte) int {
+	db.hashIndex.mu.RLock()
+	defer db.hashIndex.mu.RUnlock()
+	return db.hashIndex.idx.Len(string(key))
 }

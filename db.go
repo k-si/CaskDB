@@ -3,6 +3,7 @@ package CaskDB
 import (
 	"CaskDB/util"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"log"
@@ -15,9 +16,10 @@ import (
 
 var (
 	ErrorKeyEmpty       = errors.New("[the size of key can not be 0]")
+	ErrorKeyNil         = errors.New("[key can not be nil]")
 	ErrorKeySizeLimit   = errors.New("[key size larger than max]")
-	ErrorKeyNotExist    = errors.New("[this key not in DB]")
 	ErrorValueSizeLimit = errors.New("[value size larger than max]")
+	ErrorValueNil       = errors.New("[value can not be nil]")
 	ErrorWriteOverFlow  = errors.New("[entry too large so that the file can not storage]")
 	ErrorReadOverFlow   = errors.New("[read file offset overflow]")
 	ErrorNotInArch      = errors.New("[not found this file in arched files]")
@@ -26,12 +28,16 @@ var (
 	ErrorMergingMerge   = errors.New("[start merge when db is merging]")
 	ErrorEmptyHeader    = errors.New("[read an empty entry header, maybe read 0]")
 	ErrorNilMergedFile  = errors.New("[active merged file nil]")
+	ErrorNilPointer     = errors.New("[nil variable]")
+	ErrorMSetParams     = errors.New("[MSet needs paired parameters]")
 )
 
 const (
-	MergeDirName  = "merged"
-	PathSeparator = string(os.PathSeparator)
-	DataTypeNum   = 5
+	MergeDirName   = "merged"
+	ConfigDirName  = "conf"
+	ConfigFileName = "CaskDB.conf"
+	PathSeparator  = string(os.PathSeparator)
+	DataTypeNum    = 5
 )
 
 type DB struct {
@@ -43,10 +49,12 @@ type DB struct {
 	listIndex   *ListIndex
 	hashIndex   *HashIndex
 	setIndex    *SetIndex
+	zsetIndex   *ZSetIndex
 
-	isMerging uint32 // 0: not merge 1: merging
-	isClosed  uint32 // 0: not close 1: closed
-	mergeChan chan struct{}
+	isMerging  uint32 // 0: not merge 1: merging
+	isClosed   uint32 // 0: not close 1: closed
+	mergeChan  chan struct{}
+	listenChan chan struct{}
 }
 
 // get a DB instance
@@ -63,12 +71,14 @@ func Open(config Config) (*DB, error) {
 	}
 
 	db := &DB{
-		config:    config,
-		strIndex:  NewStrIndex(),
-		listIndex: NewListIndex(),
-		hashIndex: NewHashIndex(),
-		setIndex:  NewSetIndex(),
-		mergeChan: make(chan struct{}, DataTypeNum),
+		config:     config,
+		strIndex:   NewStrIndex(),
+		listIndex:  NewListIndex(),
+		hashIndex:  NewHashIndex(),
+		setIndex:   NewSetIndex(),
+		zsetIndex:  NewZSetIndex(),
+		mergeChan:  make(chan struct{}, DataTypeNum),
+		listenChan: make(chan struct{}),
 	}
 
 	// load db files fd from disk
@@ -105,7 +115,10 @@ func (db *DB) Close() error {
 		}
 	}
 
-	// todo: save configuration
+	// save configuration
+	if err := db.saveConfig(); err != nil {
+		return err
+	}
 
 	// close fd
 	for i := 0; i < DataTypeNum; i++ {
@@ -122,6 +135,19 @@ func (db *DB) Close() error {
 	atomic.StoreUint32(&db.isClosed, 1)
 
 	return nil
+}
+
+// save configuration
+func (db *DB) saveConfig() error {
+	if err := util.CheckAndMakeDir(db.config.DBDir + PathSeparator + ConfigDirName); err != nil {
+		return err
+	}
+	path := db.config.DBDir + PathSeparator + ConfigDirName + PathSeparator + ConfigFileName
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	b, err := json.Marshal(db.config)
+	_, err = file.Write(b)
+	err = file.Close()
+	return err
 }
 
 // traverse all files and extract their fds
@@ -241,43 +267,6 @@ func (db *DB) StoreFile(e *Entry) error {
 	return nil
 }
 
-// check size
-func (db *DB) checkSize(key, k []byte, v ...[]byte) error {
-	if err := db.checkKeySize(key); err != nil {
-		return err
-	}
-	if err := db.checkKeySize(k); err != nil {
-		return err
-	}
-	for _, i := range v {
-		if err := db.checkValSize(i); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (db *DB) checkKeySize(key []byte) error {
-	if key != nil {
-		if len(key) == 0 {
-			return ErrorKeyEmpty
-		}
-		if uint32(len(key)) > db.config.MaxKeySize {
-			return ErrorKeySizeLimit
-		}
-	}
-	return nil
-}
-
-func (db *DB) checkValSize(val []byte) error {
-	if val != nil {
-		if uint32(len(val)) > db.config.MaxValueSize {
-			return ErrorValueSizeLimit
-		}
-	}
-	return nil
-}
-
 // splice two bytes in a []byte
 func (db *DB) splice(k1, k2 []byte) []byte {
 	var buf bytes.Buffer
@@ -317,4 +306,55 @@ func (db *DB) readValue(dataType uint16, idx *Index) ([]byte, error) {
 		return nil, err
 	}
 	return val, nil
+}
+
+// check size
+func (db *DB) checkKeySize(key []byte) error {
+	if key == nil {
+		return ErrorKeyNil
+	}
+	if len(key) == 0 {
+		return ErrorKeyEmpty
+	}
+	if uint32(len(key)) > db.config.MaxKeySize {
+		return ErrorKeySizeLimit
+	}
+	return nil
+}
+
+func (db *DB) checkValSize(val []byte) error {
+	if val == nil {
+		return ErrorValueNil
+	}
+	if uint32(len(val)) > db.config.MaxValueSize {
+		return ErrorValueSizeLimit
+	}
+	return nil
+}
+
+func (db *DB) checkKeysSize(keys ...[]byte) error {
+	if keys == nil {
+		return ErrorNilPointer
+	}
+	if len(keys) == 0 {
+		return ErrorKeyEmpty
+	}
+	for _, k := range keys {
+		if err := db.checkKeySize(k); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (db *DB) checkValsSize(vals ...[]byte) error {
+	if vals == nil {
+		return ErrorNilPointer
+	}
+	for _, v := range vals {
+		if err := db.checkValSize(v); err != nil {
+			return err
+		}
+	}
+	return nil
 }

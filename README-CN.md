@@ -1,7 +1,7 @@
-Caskdb is a fast, embeddable and easy to maintain K-V database engine, which is based on bitcask model and implemented
-by golang. It currently supports five data structures: string, list, hash, set and Zset. Support client connection.
+CaskDB是快速、可内嵌、易维护的k-v数据库引擎，基于Bitcask模型并使用golang实现。 它目前支持string，list、hash、set、zset五种数据结构。支持客户端连接。
 
-The data types and command operations supported by caskdb are as follows:
+
+CaskDB支持的数据类型和命令操作如下：
 
 - String
     - Set

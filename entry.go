@@ -10,28 +10,44 @@ const EntryHeaderSize = 26
 
 // data type
 const (
-	String = iota
+	Str = iota
 	List
 	Hash
+	Set
+	ZSet
 )
 
 // mark type
 const (
-	StringSet uint16 = iota
-	StringRemove
+	StrSet uint16 = iota
+	StrRemove
 )
 
 const (
 	ListLPush uint16 = iota
-	ListRPush
 	ListLPop
+	ListRPush
 	ListRPop
+	ListLInsert
+	ListRInsert
+	ListLSet
 	ListLRem
 )
 
 const (
 	HashHSet uint16 = iota
 	HashHDel
+)
+
+const (
+	SetSAdd uint16 = iota
+	SetSRem
+	SetSMove
+)
+
+const (
+	ZSetZAdd uint16 = iota
+	ZSetZRem
 )
 
 type Entry struct {
@@ -70,19 +86,19 @@ func (e *Entry) Size() uint32 {
 }
 
 func (e *Entry) GetPreKey() string {
-	var pre []byte
+	pre := make([]byte, e.keyOffset)
 	copy(pre, e.key[:e.keyOffset])
 	return string(pre)
 }
 
 func (e *Entry) GetPostKey() string {
-	var post []byte
+	post := make([]byte, e.keySize - e.keyOffset)
 	copy(post, e.key[e.keyOffset:])
 	return string(post)
 }
 
 func (e *Entry) GetPostBytesKey() []byte {
-	var post []byte
+	post := make([]byte, e.keySize - e.keyOffset + 1)
 	copy(post, e.key[e.keyOffset:])
 	return post
 }

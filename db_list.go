@@ -3,8 +3,6 @@ package CaskDB
 import (
 	"CaskDB/ds"
 	"CaskDB/util"
-	"bytes"
-	"container/list"
 	"sync"
 )
 
@@ -23,8 +21,11 @@ func NewListIndex() *ListIndex {
 func (db *DB) LPush(key []byte, values ...[]byte) error {
 
 	// check size
-	if err := db.checkSize(key, nil, values...); err != nil {
-		return nil
+	if err := db.checkKeySize(key); err != nil {
+		return err
+	}
+	if err := db.checkValsSize(values...); err != nil {
+		return err
 	}
 
 	// lock
@@ -42,23 +43,43 @@ func (db *DB) LPush(key []byte, values ...[]byte) error {
 		}
 
 		// store index
-		f := db.activeFiles[List]
-		idx := &Index{
-			fileId: f.id,
-			offset: f.offset - int64(e.Size()),
-			value:  v,
-		}
-		db.listIndex.idx.Push(true, k, idx)
+		db.listIndex.idx.Push(true, k, v)
 	}
 
 	return nil
 }
 
+func (db *DB) LPop(key []byte) ([]byte, error) {
+
+	// check size
+	if err := db.checkKeySize(key); err != nil {
+		return nil, err
+	}
+
+	// lock
+	db.listIndex.mu.Lock()
+	defer db.listIndex.mu.Unlock()
+
+	// store disk
+	e := NewEntry(key, nil, List, ListLPop, 0)
+	if err := db.StoreFile(e); err != nil {
+		return nil, err
+	}
+
+	// pop from index
+	v := db.listIndex.idx.Pop(true, string(key))
+
+	return v, nil
+}
+
 func (db *DB) RPush(key []byte, values ...[]byte) error {
 
 	// check size
-	if err := db.checkSize(key, nil, values...); err != nil {
-		return nil
+	if err := db.checkKeySize(key); err != nil {
+		return err
+	}
+	if err := db.checkValsSize(values...); err != nil {
+		return err
 	}
 
 	// lock
@@ -76,54 +97,16 @@ func (db *DB) RPush(key []byte, values ...[]byte) error {
 		}
 
 		// store index
-		f := db.activeFiles[List]
-		idx := &Index{
-			fileId: f.id,
-			offset: f.offset - int64(e.Size()),
-			value:  v,
-		}
-		db.listIndex.idx.Push(false, k, idx)
+		db.listIndex.idx.Push(false, k, v)
 	}
 
 	return nil
 }
 
-func (db *DB) LPop(key []byte) ([]byte, error) {
+func (db *DB) RPop(key []byte) ([]byte, error) {
 
 	// check size
-	if err := db.checkSize(key, nil); err != nil {
-		return nil, err
-	}
-
-	// lock
-	db.listIndex.mu.Lock()
-	defer db.listIndex.mu.Unlock()
-
-	// store disk
-	e := NewEntry(key, nil, List, ListLPop, 0)
-	if err := db.StoreFile(e); err != nil {
-		return nil, err
-	}
-
-	// pop from index
-	v := db.listIndex.idx.Pop(true, string(key))
-	if v == nil {
-		return nil, ErrorKeyNotExist
-	}
-
-	// return the value of popped element
-	val, err := db.readValue(List, v.(*Index))
-	if err != nil {
-		return nil, err
-	}
-
-	return val, nil
-}
-
-func (db *DB) RPop(key []byte, values ...[]byte) ([]byte, error) {
-
-	// check size
-	if err := db.checkSize(key, nil, values...); err != nil {
+	if err := db.checkKeySize(key); err != nil {
 		return nil, err
 	}
 
@@ -139,18 +122,8 @@ func (db *DB) RPop(key []byte, values ...[]byte) ([]byte, error) {
 
 	// pop from index
 	v := db.listIndex.idx.Pop(false, string(key))
-	if v == nil {
-		return nil, ErrorKeyNotExist
-	}
 
-	// return the value of popped element
-	idx := v.(*Index)
-	val, err := db.readValue(List, idx)
-	if err != nil {
-		return nil, err
-	}
-
-	return val, nil
+	return v, nil
 }
 
 // remove some element,
@@ -160,8 +133,11 @@ func (db *DB) RPop(key []byte, values ...[]byte) ([]byte, error) {
 func (db *DB) LRem(key, value []byte, n int) error {
 
 	// check size
-	if err := db.checkSize(key, nil, value); err != nil {
-		return nil
+	if err := db.checkKeySize(key); err != nil {
+		return err
+	}
+	if err := db.checkValSize(value); err != nil {
+		return err
 	}
 
 	// lock
@@ -177,59 +153,124 @@ func (db *DB) LRem(key, value []byte, n int) error {
 	}
 
 	// remove all items that equal to value from index
-	record := db.listIndex.idx.GetRecord()
-	LIdxRem(record, string(key), value, n)
+	db.listIndex.idx.Remove(string(key), value, n)
 
 	return nil
 }
 
-/*
-	in order to prevent the circular reference of the package,
-	some functions that related to CaskDB package are extracted,
-	although it's not very elegant
-*/
+// get Nth element
+func (db *DB) LIndex(key []byte, n int) ([]byte, error) {
 
-// remove n elements that meet the list from left to right
-func LIdxRem(record ds.LRecord, key string, value []byte, n int) {
-	var es []*list.Element
+	// check
+	if err := db.checkKeySize(key); err != nil {
+		return nil, err
+	}
 
-	if n == 0 {
-		for p := record[key].Front(); p != nil; p = p.Next() {
-			if bytes.Compare(value, p.Value.(*Index).Value()) == 0 {
-				es = append(es, p)
-			}
-		}
-	} else if n > 0 {
-		// remove -n items from left to right that equal to value
-		for i, p := 0, record[key].Front(); i < n && p != nil; p = p.Next() {
-			if bytes.Compare(value, p.Value.(*Index).Value()) == 0 {
-				es = append(es, p)
-				i++
-			}
-		}
-	} else {
-		// remove n items from right to left that equal to value
-		n = -n
-		for i, p := 0, record[key].Back(); i < n && p != nil; p = p.Prev() {
-			if bytes.Compare(value, p.Value.(*Index).Value()) == 0 {
-				es = append(es, p)
-				i++
-			}
-		}
-	}
-	for _, item := range es {
-		record[key].Remove(item)
-	}
+	// lock
+	db.listIndex.mu.RLock()
+	defer db.listIndex.mu.RUnlock()
+
+	v := db.listIndex.idx.Get(string(key), n)
+	return v, nil
 }
 
-func LIdxGet(record ds.LRecord, key string, value []byte) *Index {
-	if record[key] == nil {
-		return nil
+func (db *DB) LInsert(key, value []byte, n int) error {
+	// check size
+	if err := db.checkKeySize(key); err != nil {
+		return err
 	}
-	for p := record[key].Front(); p != nil; p = p.Next() {
-		if bytes.Compare(value, p.Value.(*Index).Value()) == 0 {
-			return p.Value.(*Index)
-		}
+	if err := db.checkValSize(value); err != nil {
+		return err
 	}
+
+	// lock
+	db.listIndex.mu.Lock()
+	defer db.listIndex.mu.Unlock()
+
+	// store disk
+	keys := db.splice(key, util.IntToBytes(n))
+	e := NewEntry(keys, value, List, ListLInsert, uint32(len(key)))
+	if err := db.StoreFile(e); err != nil {
+		return err
+	}
+
+	db.listIndex.idx.Insert(string(key), 0, n, value)
 	return nil
+}
+
+func (db *DB) LRInsert(key, value []byte, n int) error {
+	// check size
+	if err := db.checkKeySize(key); err != nil {
+		return err
+	}
+	if err := db.checkValSize(value); err != nil {
+		return err
+	}
+
+	// lock
+	db.listIndex.mu.Lock()
+	defer db.listIndex.mu.Unlock()
+
+	// store disk
+	keys := db.splice(key, util.IntToBytes(n))
+	e := NewEntry(keys, value, List, ListRInsert, uint32(len(key)))
+	if err := db.StoreFile(e); err != nil {
+		return err
+	}
+
+	db.listIndex.idx.Insert(string(key), 1, n, value)
+	return nil
+}
+
+// cover the value of Nth element
+func (db *DB) LSet(key, value []byte, n int) error {
+
+	// check
+	if err := db.checkKeySize(key); err != nil {
+		return err
+	}
+	if err := db.checkValSize(value); err != nil {
+		return err
+	}
+
+	// lock
+	db.listIndex.mu.Lock()
+	defer db.listIndex.mu.Unlock()
+
+	// store disk
+	keys := db.splice(key, util.IntToBytes(n))
+	e := NewEntry(keys, value, List, ListLSet, uint32(len(key)))
+	if err := db.StoreFile(e); err != nil {
+		return err
+	}
+
+	db.listIndex.idx.Put(string(key), value, n)
+	return nil
+}
+
+func (db *DB) LRange(key []byte, start, stop int) ([][]byte, error) {
+
+	// check size
+	if err := db.checkKeySize(key); err != nil {
+		return nil, err
+	}
+
+	// lock
+	db.listIndex.mu.RLock()
+	defer db.listIndex.mu.RUnlock()
+
+	res := db.listIndex.idx.Range(string(key), start, stop)
+	return res, nil
+}
+
+func (db *DB) LExist(key, value []byte) bool {
+	db.listIndex.mu.RLock()
+	defer db.listIndex.mu.RUnlock()
+	return db.listIndex.idx.ValExist(string(key), value)
+}
+
+func (db *DB) LLen(key []byte) int {
+	db.listIndex.mu.RLock()
+	defer db.listIndex.mu.RUnlock()
+	return db.listIndex.idx.LLen(string(key))
 }

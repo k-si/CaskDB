@@ -17,53 +17,68 @@ func (i *Index) Value() []byte {
 	return i.value
 }
 
-type (
-	SetIndex struct {
-		mu  *sync.RWMutex
-		idx *ds.Set
-	}
-)
-
-func NewSetIndex() *SetIndex {
-	return &SetIndex{
-		mu:  &sync.RWMutex{},
-		idx: ds.NewSet(),
-	}
-}
-
 // build index when starting database
 func (db *DB) buildStrIndex(e *Entry, idx *Index) {
 	switch e.GetMarkType() {
-	case StringSet:
+	case StrSet:
 		db.strIndex.idx.Put(e.key, idx)
-	case StringRemove:
+	case StrRemove:
 		db.strIndex.idx.Remove(e.key)
 	}
 }
 
-func (db *DB) buildListIndex(e *Entry, idx *Index) {
+func (db *DB) buildListIndex(e *Entry) {
 	switch e.GetMarkType() {
 	case ListLPush:
-		db.listIndex.idx.Push(true, string(e.key), idx)
-	case ListRPush:
-		db.listIndex.idx.Push(false, string(e.key), idx)
+		db.listIndex.idx.Push(true, string(e.key), e.value)
 	case ListLPop:
 		db.listIndex.idx.Pop(true, string(e.key))
+	case ListRPush:
+		db.listIndex.idx.Push(false, string(e.key), e.value)
 	case ListRPop:
 		db.listIndex.idx.Pop(false, string(e.key))
-	case ListLRem:
-		record := db.listIndex.idx.GetRecord()
+	case ListLSet:
 		n := util.BytesToInt(e.GetPostBytesKey())
-		LIdxRem(record, e.GetPreKey(), e.value, n)
+		db.listIndex.idx.Put(e.GetPreKey(), e.value, n)
+	case ListLInsert:
+		n := util.BytesToInt(e.GetPostBytesKey())
+		db.listIndex.idx.Insert(e.GetPreKey(), ds.Before, n, e.value)
+	case ListRInsert:
+		n := util.BytesToInt(e.GetPostBytesKey())
+		db.listIndex.idx.Insert(e.GetPreKey(), ds.After, n, e.value)
+	case ListLRem:
+		n := util.BytesToInt(e.GetPostBytesKey())
+		db.listIndex.idx.Remove(e.GetPreKey(), e.value, n)
 	}
 }
 
-func (db *DB) buildHashIndex(e *Entry, idx *Index) {
+func (db *DB) buildHashIndex(e *Entry) {
 	switch e.GetMarkType() {
 	case HashHSet:
-		db.hashIndex.idx.Put(e.GetPreKey(), e.GetPostKey(), idx)
+		db.hashIndex.idx.Put(e.GetPreKey(), e.GetPostKey(), e.value)
 	case HashHDel:
 		db.hashIndex.idx.Remove(e.GetPreKey(), e.GetPostKey())
+	}
+}
+
+func (db *DB) buildSetIndex(e *Entry) {
+	switch e.GetMarkType() {
+	case SetSAdd:
+		db.setIndex.idx.Add(string(e.key), string(e.value))
+	case SetSRem:
+		db.setIndex.idx.Remove(string(e.key), string(e.value))
+	case SetSMove:
+		db.setIndex.idx.Move(e.GetPreKey(), e.GetPostKey(), string(e.value))
+	}
+}
+
+func (db *DB) buildZSetIndex(e *Entry) {
+	switch e.GetMarkType() {
+	case ZSetZAdd:
+		score := util.BytesToFloat64(e.GetPostBytesKey())
+		db.zsetIndex.idx.Add(e.GetPreKey(), string(e.value), score)
+	case ZSetZRem:
+		db.zsetIndex.idx.Remove(string(e.key), string(e.value))
 	}
 }
 
@@ -125,21 +140,23 @@ func (db *DB) loadFileIndexes(f *File) error {
 		// read entry from file
 		for offset < db.config.MaxFileSize {
 			if e, err := f.Read(offset); err == nil {
-				idx := &Index{
-					//valueSize: e.valueSize,
-					fileId: f.id,
-					offset: offset,
-				}
 
 				// different data types correspond to different index types
-				// todo: other types
 				switch e.GetDataType() {
-				case String:
+				case Str:
+					idx := &Index{
+						fileId: f.id,
+						offset: offset,
+					}
 					db.buildStrIndex(e, idx)
 				case List:
-					db.buildListIndex(e, idx)
+					db.buildListIndex(e)
 				case Hash:
-					db.buildHashIndex(e, idx)
+					db.buildHashIndex(e)
+				case Set:
+					db.buildSetIndex(e)
+				case ZSet:
+					db.buildZSetIndex(e)
 				}
 				offset += int64(e.Size())
 			} else if err == ErrorEmptyHeader {

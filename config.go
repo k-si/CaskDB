@@ -9,7 +9,6 @@ const (
 	DefaultMaxFileSize   = 1 * 1024 * 1024 // 1mb
 	DefaultMergeInterval = 24 * time.Hour
 	DefaultWriteSync     = false
-	DefaultMultiThread   = false
 )
 
 type Config struct {
@@ -19,7 +18,6 @@ type Config struct {
 	MaxFileSize   int64
 	MergeInterval time.Duration
 	WriteSync     bool
-	MultiThread   bool
 }
 
 func DefaultConfig() Config {
@@ -30,6 +28,5 @@ func DefaultConfig() Config {
 		MaxFileSize:   DefaultMaxFileSize,
 		MergeInterval: DefaultMergeInterval,
 		WriteSync:     DefaultWriteSync,
-		MultiThread:   DefaultMultiThread,
 	}
 }
