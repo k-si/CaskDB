@@ -21,8 +21,7 @@ func (db *DB) listeningGC() {
 	case <-timer.C:
 		timer.Reset(db.config.MergeInterval)
 		if err := db.GC(); err != nil {
-			log.Println("[merge err]", err)
-			return
+			log.Println("[GC err]", err)
 		}
 	}
 }
@@ -82,6 +81,15 @@ func (db *DB) GC() error {
 		// every goroutine do its merge task
 		go func(i int) {
 			defer wg.Done()
+
+			// List snapshot GC
+			if i == 1 {
+				log.Println("[list snapshot...]")
+				if mergeErr = db.listSnapshot(mergePath); mergeErr != nil {
+					return
+				}
+				return
+			}
 
 			ids := fids[i] // all files with this type
 
@@ -153,9 +161,6 @@ func (db *DB) GC() error {
 					return
 				}
 			}
-
-			// update indexes
-			// i can load all files again, but i choose updating in func storeMerged
 
 		}(i)
 	}
@@ -232,19 +237,10 @@ func (db *DB) entryValid(e *Entry, eFid uint32, eOffset int64) bool {
 			return false
 		}
 	case List:
-		/*
-			todo: here have a bug, the uniqueness of element cannot be determined.
-			todo: in order to ensure the correctness of the data, the list data will not be garbage collected for the time being
-		*/
-		//if mt == ListLPush || mt == ListRPush {
-		//	if db.listIndex.idx.ValExist(string(e.key), e.value) {
-		//		return true
-		//	}
-		//} else if mt == ListLSet || mt == ListLInsertBefore || mt == ListLInsertAfter {
-		//	if db.listIndex.idx.ValExist(e.GetPreKey(), e.value) {
-		//		return true
-		//	}
-		//}
+		// unable to determine whether List entry is valid,
+		// because if we push 'a' and pop 'a' and push 'a',
+		// when GC, we can not ensure the correctness of 'a',
+		// the solution is to use snapshots.
 	case Hash:
 		if mt == HashHSet {
 			v := db.hashIndex.idx.Get(e.GetPreKey(), e.GetPostKey())

@@ -6,18 +6,6 @@ import (
 	"math"
 )
 
-func Encode(key, value interface{}) ([]byte, []byte, error) {
-	return nil, nil, nil
-}
-
-func EncodeKey(key interface{}) ([]byte, error) {
-	return nil, nil
-}
-
-func DecodeValue(value []byte) (interface{}, error) {
-	return nil, nil
-}
-
 func IntToBytes(n int) []byte {
 	x := int64(n)
 	buf := bytes.NewBuffer([]byte{})

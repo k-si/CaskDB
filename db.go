@@ -34,7 +34,6 @@ var (
 
 const (
 	MergeDirName   = "merged"
-	ConfigDirName  = "conf"
 	ConfigFileName = "CaskDB.conf"
 	PathSeparator  = string(os.PathSeparator)
 	DataTypeNum    = 5
@@ -139,10 +138,7 @@ func (db *DB) Close() error {
 
 // save configuration
 func (db *DB) saveConfig() error {
-	if err := util.CheckAndMakeDir(db.config.DBDir + PathSeparator + ConfigDirName); err != nil {
-		return err
-	}
-	path := db.config.DBDir + PathSeparator + ConfigDirName + PathSeparator + ConfigFileName
+	path := db.config.DBDir + PathSeparator + ConfigFileName
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	b, err := json.Marshal(db.config)
 	_, err = file.Write(b)

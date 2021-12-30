@@ -84,9 +84,9 @@ func TestDB_LInsert_RInsert(t *testing.T) {
 	// 0 1 a b 2 c 3
 	err = db.RPush(k, []byte("a"), []byte("b"), []byte("c"))
 	err = db.LInsert(k, []byte("0"), 0)
-	err = db.LRInsert(k, []byte("1"), 0)
+	err = db.RInsert(k, []byte("1"), 0)
 	err = db.LInsert(k, []byte("2"), 4)
-	err = db.LRInsert(k, []byte("3"), 5)
+	err = db.RInsert(k, []byte("3"), 5)
 	res, err := db.LRange(k, 0, -1)
 
 	assert.Nil(t, err)
@@ -214,7 +214,7 @@ func TestDB_List(t *testing.T) {
 			err = db.LPush(k, []byte("v1"))
 			err = db.RPush(k, []byte("v2"))
 			err = db.LInsert(k, []byte("v3"), 1)
-			err = db.LRInsert(k, []byte("v4"), 2)
+			err = db.RInsert(k, []byte("v4"), 2)
 			_, err = db.LPop(k)
 			_, err = db.RPop(k)
 			err = db.LSet(k, []byte("v"), 0)

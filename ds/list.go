@@ -206,3 +206,10 @@ func (l *List) changeIdx(key string, n int) int {
 	}
 	return n
 }
+
+func (l *List) GetAllKeys() (res []string) {
+	for k, _ := range l.table {
+		res = append(res, k)
+	}
+	return
+}

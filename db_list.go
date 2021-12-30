@@ -198,7 +198,7 @@ func (db *DB) LInsert(key, value []byte, n int) error {
 	return nil
 }
 
-func (db *DB) LRInsert(key, value []byte, n int) error {
+func (db *DB) RInsert(key, value []byte, n int) error {
 	// check size
 	if err := db.checkKeySize(key); err != nil {
 		return err
