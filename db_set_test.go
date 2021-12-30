@@ -1,7 +1,6 @@
 package CaskDB
 
 import (
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
@@ -137,7 +136,8 @@ func TestDB_SScan(t *testing.T) {
 
 	err = db.SAdd(k, []byte("v1"), []byte("v2"))
 	res, err := db.SScan(k)
-	fmt.Print(string(res[0]), string(res[1]))
+	//fmt.Print(string(res[0]), string(res[1]))
+	assert.Equal(t, 2, len(res))
 
 	assert.Equal(t, 2, db.SCard(k))
 	assert.True(t, db.SIsMember(k, []byte("v1")))

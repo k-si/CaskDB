@@ -5,14 +5,6 @@ import (
 	"sync"
 )
 
-// SAdd
-// SRem
-// SMove
-// SUnion
-// SDiff
-// SKeyExist
-// SIsMember
-
 type SetIndex struct {
 	mu  *sync.RWMutex
 	idx *ds.Set

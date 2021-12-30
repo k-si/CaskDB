@@ -2,7 +2,6 @@ package CaskDB
 
 import (
 	"CaskDB/ds"
-	"log"
 	"sync"
 )
 
@@ -84,11 +83,9 @@ func (db *DB) SetNx(key, value []byte) error {
 func (db *DB) setValNx(key, value []byte) error {
 	v, err := db.getVal(key)
 	if err != nil {
-		log.Println(err)
 		return err
 	}
 	if v == nil {
-		log.Println("v nil")
 		if err = db.setVal(key, value); err != nil {
 			return err
 		}
