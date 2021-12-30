@@ -21,58 +21,28 @@ func TestAVLTree_Get(t *testing.T) {
 
 func TestAVLTree_Put(t *testing.T) {
 	avl := NewAVLTree()
-	avl.Put([]byte("name"), "zhang san")
+	avl.Put([]byte("0"), "a")
+	avl.Put([]byte("1"), "b")
+	avl.Put([]byte("2"), "c")
+	avl.Put([]byte("3"), "d")
+	avl.Put([]byte("4"), "e")
+	avl.Put([]byte("5"), "f")
+	PrintAVLTree(avl.root)
 }
 
-func TestAVLTree_Remove(t *testing.T) {
+func TestAVLTree_Remove_1(t *testing.T) {
 	avl := NewAVLTree()
-	avl.Remove([]byte("name"))
-}
-
-func TestAVLTree_1(t *testing.T) {
-	avl := NewAVLTree()
-
-	avl.Put([]byte("name"), "zhang san")
-	v := avl.Get([]byte("name"))
-
-	assert.Equal(t, "zhang san", v)
-}
-
-func TestAVLTree_2(t *testing.T) {
-	sl := NewSkipList()
-
-	sl.Put([]byte("name"), "zhang san")
-	sl.Put([]byte("name"), "li si")
-	v := sl.Get([]byte("name"))
-
-	assert.Equal(t, "li si", v)
-}
-
-func TestAVLTree_3(t *testing.T) {
-	sl := NewSkipList()
-
-	sl.Put([]byte("name"), "zhang san")
-	sl.Remove([]byte("name"))
-	v := sl.Get([]byte("name"))
-
-	assert.Nil(t, nil, v)
-}
-
-// exception test
-func TestAVLTree_4(t *testing.T) {
-	sl := NewSkipList()
-
-	sl.Put([]byte("a"), "1")
-	sl.Put([]byte("b"), "2")
-	sl.Put([]byte("d"), "4")
-	v := sl.Get([]byte("c"))
-
-	assert.Nil(t, nil, v)
+	avl.Put([]byte("1"), 1)
+	avl.Put([]byte("2"), 2)
+	avl.Put([]byte("3"), 3)
+	PrintAVLTree(avl.root)
+	avl.Remove([]byte("2"))
+	PrintAVLTree(avl.root)
 }
 
 // test random option
-func TestAVLTree_5(t *testing.T) {
-	sl := NewSkipList()
+func TestAVLTree(t *testing.T) {
+	avl := NewAVLTree()
 
 	// store expect value
 	mp := make(map[string]int)
@@ -83,23 +53,24 @@ func TestAVLTree_5(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 
-	for i := 0; i < 5000; i++ {
+	for i := 0; i < 10000; i++ {
 		opt := rand.Intn(2)
-		k := rand.Intn(100)
-		v := rand.Intn(100)
+		k := rand.Intn(1000)
+		v := rand.Intn(1000)
 		switch opt {
 		case put:
-			sl.Put([]byte(strconv.Itoa(k)), v)
+			avl.Put([]byte(strconv.Itoa(k)), v)
 			mp[strconv.Itoa(k)] = v
 		case rem:
-			sl.Remove([]byte(strconv.Itoa(k)))
+			avl.Remove([]byte(strconv.Itoa(k)))
 			delete(mp, strconv.Itoa(k))
 		}
 	}
+	//PrintAVLTree(avl.root)
 
 	// check actual value
 	for k, v := range mp {
-		assert.Equal(t, sl.Get([]byte(k)), v)
+		assert.Equal(t, avl.Get([]byte(k)), v)
 	}
 }
 
@@ -160,45 +131,44 @@ func PrepareAVL() *AVLTree {
 //goos: darwin
 //goarch: arm64
 //pkg: CaskDB/ds
-//BenchmarkAVLTree_Get-8          16574833                63.59 ns/op            7 B/op          0 allocs/op
+//BenchmarkAVLTree_Get-8          18951756                63.90 ns/op            7 B/op          0 allocs/op
 //PASS
-//ok      CaskDB/ds       1.335s
+//ok      CaskDB/ds       2.309s
 
-// in my test, the fastest is 58s and the slowest is 68s, this is unstable
 func BenchmarkAVLTree_Get(b *testing.B) {
-	sl := PrepareSL()
+	avl := PrepareAVL()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		sl.Get([]byte(strconv.Itoa(i)))
+		avl.Get([]byte(strconv.Itoa(i)))
 	}
 }
 
 //goos: darwin
 //goarch: arm64
 //pkg: CaskDB/ds
-//BenchmarkAVLTree_Put-8             68772             17792 ns/op             101 B/op          4 allocs/op
+//BenchmarkAVLTree_Put-8             10000            156399 ns/op              87 B/op          3 allocs/op
 //PASS
-//ok      CaskDB/ds       1.580s
+//ok      CaskDB/ds       1.846s
 
 func BenchmarkAVLTree_Put(b *testing.B) {
-	sl := PrepareSL()
+	avl := PrepareAVL()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		sl.Put([]byte(strconv.Itoa(i)), i)
+		avl.Put([]byte(strconv.Itoa(i)), i)
 	}
 }
 
 //goos: darwin
 //goarch: arm64
 //pkg: CaskDB/ds
-//BenchmarkAVLTree_Remove-8       36373234                31.30 ns/op            7 B/op          0 allocs/op
+//BenchmarkAVLTree_Remove-8       52641296                24.01 ns/op            7 B/op          0 allocs/op
 //PASS
-//ok      CaskDB/ds       1.402s
+//ok      CaskDB/ds       1.689s
 
 func BenchmarkAVLTree_Remove(b *testing.B) {
-	sl := PrepareSL()
+	avl := PrepareAVL()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		sl.Remove([]byte(strconv.Itoa(i)))
+		avl.Remove([]byte(strconv.Itoa(i)))
 	}
 }

@@ -4,8 +4,11 @@ import (
 	"bytes"
 )
 
+var isRem = false
+
 type AVLTree struct {
 	root *aVLTreeNode
+	size int
 }
 
 func NewAVLTree() *AVLTree {
@@ -14,10 +17,15 @@ func NewAVLTree() *AVLTree {
 
 func (t *AVLTree) Put(key []byte, value interface{}) {
 	t.root = insert(t.root, key, value)
+	t.size++
 }
 
 func (t *AVLTree) Remove(key []byte) {
 	t.root = remove(t.root, key)
+	if isRem {
+		t.size--
+		isRem = false
+	}
 }
 
 func (t *AVLTree) Get(key []byte) interface{} {
@@ -25,6 +33,10 @@ func (t *AVLTree) Get(key []byte) interface{} {
 		return n.value
 	}
 	return nil
+}
+
+func (t *AVLTree) Size() int {
+	return t.size
 }
 
 type aVLTreeNode struct {
@@ -39,7 +51,7 @@ func newAVLNode(key []byte, value interface{}, left, right *aVLTreeNode) *aVLTre
 	return &aVLTreeNode{
 		key:    key,
 		value:  value,
-		height: 0,
+		height: 1,
 		left:   left,
 		right:  right,
 	}
@@ -49,14 +61,15 @@ func newAVLNode(key []byte, value interface{}, left, right *aVLTreeNode) *aVLTre
 func insert(cur *aVLTreeNode, key []byte, value interface{}) *aVLTreeNode {
 	if cur == nil {
 		cur = newAVLNode(key, value, nil, nil)
+		return cur
 	}
 
 	if bytes.Compare(cur.key, key) == 0 {
-		return cur
-	} else if bytes.Compare(key, cur.key) == 1 {
+		cur.value = value
+	} else if bytes.Compare(key, cur.key) > 0 {
 		cur.right = insert(cur.right, key, value)
 		if getHeight(cur.right)-getHeight(cur.left) == 2 {
-			if bytes.Compare(key, cur.right.key) == 1 {
+			if bytes.Compare(key, cur.right.key) > 0 {
 				cur = leftRotation(cur) // 情况1：需要单左旋
 			} else {
 				cur = rightLeftRotation(cur) // 情况2：需要右旋再左旋
@@ -65,13 +78,15 @@ func insert(cur *aVLTreeNode, key []byte, value interface{}) *aVLTreeNode {
 	} else {
 		cur.left = insert(cur.left, key, value)
 		if getHeight(cur.left)-getHeight(cur.right) == 2 {
-			if bytes.Compare(key, cur.left.key) == -1 {
+			if bytes.Compare(key, cur.left.key) < 0 {
 				cur = rightRotation(cur) // 情况3：需要单右旋
 			} else {
 				cur = leftRightRotation(cur) // 情况4：需要左旋再右旋
 			}
 		}
 	}
+
+	cur.height = max(getHeight(cur.left), getHeight(cur.right)) + 1
 
 	return cur
 }
@@ -83,22 +98,21 @@ func remove(cur *aVLTreeNode, key []byte) *aVLTreeNode {
 	}
 
 	if bytes.Compare(cur.key, key) == 0 {
+		isRem = true
 
 		// 存在左右子树
 		if cur.left != nil && cur.right != nil {
 
 			// 左子树高，通过赋值删除左子树最大值节点，维护树的有序
 			if getHeight(cur.left) > getHeight(cur.right) {
-				m := getMax(cur)
-				cur.key = m.key
-				cur.value = m.value
-				cur.left = remove(cur.left, key)
+				m := getMax(cur.left)
+				cur.key, cur.value = m.key, m.value
+				cur.left = remove(cur.left, m.key)
 			} else {
 				// 右子树高，删右子树最小值节点
-				m := getMin(cur)
-				cur.key = m.key
-				cur.value = m.value
-				cur.right = remove(cur.right, key)
+				m := getMin(cur.right)
+				cur.key, cur.value = m.key, m.value
+				cur.right = remove(cur.right, m.key)
 			}
 		} else {
 			// 只有一个子树或无子树
@@ -110,24 +124,35 @@ func remove(cur *aVLTreeNode, key []byte) *aVLTreeNode {
 				cur = nil
 			}
 		}
-	} else if bytes.Compare(key, cur.key) == 1 {
+	} else if bytes.Compare(key, cur.key) > 0 {
 
 		// 删除右子树节点，相当于在左子树插入节点
 		cur.right = remove(cur.right, key)
-		if getHeight(cur.left.left) > getHeight(cur.left.right) {
-			cur = rightRotation(cur) // 相当于情况3、4
-		} else {
-			cur = leftRightRotation(cur)
-		}
 
+		// 失衡调整
+		if getHeight(cur.left)-getHeight(cur.right) == 2 {
+			if getHeight(cur.left.right) > getHeight(cur.left.left) {
+				cur = leftRightRotation(cur)
+			} else {
+				cur = rightRotation(cur) // 相当于情况3、4
+			}
+		} else {
+			cur.height = max(getHeight(cur.left), getHeight(cur.right)) + 1
+		}
 	} else {
 
 		// 删除左子树节点，相当于在右子树插入节点
 		cur.left = remove(cur.left, key)
-		if getHeight(cur.right.right) > getHeight(cur.right.left) {
-			cur = leftRotation(cur) // 相当于情况1、2
+
+		// 失衡调整
+		if getHeight(cur.right)-getHeight(cur.left) == 2 {
+			if getHeight(cur.right.left) > getHeight(cur.right.right) {
+				cur = rightLeftRotation(cur)
+			} else {
+				cur = leftRotation(cur) // 相当于情况1、2
+			}
 		} else {
-			cur = rightLeftRotation(cur)
+			cur.height = max(getHeight(cur.left), getHeight(cur.right)) + 1
 		}
 	}
 
@@ -141,7 +166,7 @@ func find(cur *aVLTreeNode, key []byte) *aVLTreeNode {
 	}
 	if bytes.Compare(key, cur.key) == 0 {
 		return cur
-	} else if bytes.Compare(key, cur.key) == 1 {
+	} else if bytes.Compare(key, cur.key) > 0 {
 		return find(cur.right, key)
 	} else {
 		return find(cur.left, key)
@@ -208,23 +233,29 @@ func leftRightRotation(n *aVLTreeNode) *aVLTreeNode {
 // 获取节点高度
 func getHeight(n *aVLTreeNode) int {
 	if n == nil {
-		return -1
+		return 0
 	}
 	return max(getHeight(n.left), getHeight(n.right)) + 1
 }
 
 // 子树中最大值节点
 func getMax(n *aVLTreeNode) *aVLTreeNode {
-	if n.right != nil {
-		return getMax(n.right)
+	if n == nil {
+		return nil
+	}
+	for n.right != nil {
+		n = n.right
 	}
 	return n
 }
 
 // 子树中最小值节点
 func getMin(n *aVLTreeNode) *aVLTreeNode {
-	if n.left != nil {
-		return getMin(n.left)
+	if n == nil {
+		return nil
+	}
+	for n.left != nil {
+		n = n.left
 	}
 	return n
 }

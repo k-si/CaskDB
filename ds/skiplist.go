@@ -1,90 +1,85 @@
 package ds
 
 import (
-	"bytes"
-	"math"
 	"math/rand"
 	"time"
 )
 
 const (
-	MaxLevel    int     = 32 // from 1 level to 32 level
-	Probability float64 = 1 / math.E
+	MaxLevel    int     = 32   // from 1 level to 32 level
+	Probability float64 = 0.25 // promotion probability
+	GE          int     = 0
+	LE          int     = 1
 )
 
 type SkipList struct {
-	header *skipListNode
-	level  int         // the highest level of current skip list
-	size   int
+	level int // the highest level of current skip list
+	size  int
+	head  *skipListNode
 }
 
 type skipListNode struct {
-	key   []byte
-	value interface{}
-	next  []*skipListNode
+	score  float64
+	member string
+	next   []*skipListNode
 }
 
 func NewSkipList() *SkipList {
 	return &SkipList{
-		header: newSkipListNode(nil, nil, MaxLevel),
-		level:  1,
-		size:   0,
+		head:  newSkipListNode(0, "", MaxLevel),
+		level: 1,
+		size:  0,
 	}
 }
 
-func newSkipListNode(key []byte, value interface{}, level int) *skipListNode {
+func newSkipListNode(score float64, member string, level int) *skipListNode {
 	return &skipListNode{
-		key:   key,
-		value: value,
-		next:  make([]*skipListNode, level),
+		score:  score,
+		member: member,
+		next:   make([]*skipListNode, level),
 	}
-}
-
-func (skn *skipListNode) Value() interface{} {
-	return skn.value
-}
-
-func (sl *SkipList) Get(key []byte) interface{} {
-	if n := sl.find(key); n != nil {
-		return n.value
-	}
-	return nil
 }
 
 // find node
-func (sl *SkipList) find(key []byte) *skipListNode {
-	x := sl.header
+// opt == 0, find first node that >= score
+// opt == 1, find last node that <= score
+func (sl *SkipList) Find(score float64, opt int) *skipListNode {
+	x := sl.head
 
-	for i := sl.level - 1; i >= 0; i-- {
-		for x.next[i] != nil && bytes.Compare(x.next[i].key, key) < 0 {
-			x = x.next[i]
+	if opt == GE {
+		for i := sl.level - 1; i >= 0; i-- {
+			for x.next[i] != nil && x.next[i].score < score {
+				x = x.next[i]
+			}
 		}
-	}
-	x = x.next[0]
-	if x != nil && bytes.Compare(x.key, key) == 0 {
-		return x
+		x = x.next[0]
+		if x != nil && x.score >= score {
+			return x
+		}
+	} else {
+		for i := sl.level - 1; i >= 0; i-- {
+			for x.next[i] != nil && x.next[i].score <= score {
+				x = x.next[i]
+			}
+		}
+		if x != nil && x != sl.head && x.score <= score {
+			return x
+		}
 	}
 
 	return nil
 }
 
-func (sl *SkipList) Put(key []byte, value interface{}) {
+func (sl *SkipList) Insert(score float64, member string) *skipListNode {
 
 	// store the front node of each layer into update
 	update := make([]*skipListNode, MaxLevel)
-	x := sl.header
+	x := sl.head
 	for i := sl.level - 1; i >= 0; i-- {
-		for x.next[i] != nil && bytes.Compare(x.next[i].key, key) < 0 {
+		for x.next[i] != nil && (x.next[i].score < score || (x.next[i].score == score && (x.next[i].member < member))) {
 			x = x.next[i]
 		}
 		update[i] = x
-	}
-
-	// check whether the same key already exists at the position to be inserted
-	x = x.next[0]
-	if x != nil && bytes.Compare(x.key, key) == 0 {
-		x.value = value
-		return
 	}
 
 	// insert newly node:
@@ -93,28 +88,30 @@ func (sl *SkipList) Put(key []byte, value interface{}) {
 	lvl := sl.randomLevel()
 	if lvl > sl.level {
 		for i := sl.level; i < lvl; i++ {
-			update[i] = sl.header
+			update[i] = sl.head
 		}
 		sl.level = lvl
 	}
 
 	// other sub nodes to be inserted
-	newNode := newSkipListNode(key, value, lvl)
+	newNode := newSkipListNode(score, member, lvl)
 	for i := 0; i < lvl; i++ {
 		newNode.next[i] = update[i].next[i]
 		update[i].next[i] = newNode
 	}
 
 	sl.size++
+
+	return newNode
 }
 
-func (sl *SkipList) Remove(key []byte) {
+func (sl *SkipList) Delete(score float64, member string) {
 
 	// store front node into update
 	update := make([]*skipListNode, MaxLevel)
-	x := sl.header
+	x := sl.head
 	for i := sl.level - 1; i >= 0; i-- {
-		for x.next[i] != nil && bytes.Compare(x.next[i].key, key) < 0 {
+		for x.next[i] != nil && (x.next[i].score < score || (x.next[i].score == score && (x.next[i].member < member))) {
 			x = x.next[i]
 		}
 		update[i] = x
@@ -122,7 +119,7 @@ func (sl *SkipList) Remove(key []byte) {
 
 	// check whether the same key already exists at the position to be inserted
 	x = x.next[0]
-	if x != nil && bytes.Compare(x.key, key) == 0 {
+	if x != nil && x.score == score && x.member == member {
 
 		// remove this node
 		for i := 0; i < sl.level; i++ {
@@ -132,6 +129,13 @@ func (sl *SkipList) Remove(key []byte) {
 			update[i].next[i] = x.next[i]
 		}
 	}
+
+	// chang level of skip list
+	for sl.level > 1 && sl.head.next[sl.level-1] == nil {
+		sl.level--
+	}
+
+	sl.size--
 }
 
 // get random level
