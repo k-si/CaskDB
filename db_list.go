@@ -1,8 +1,8 @@
 package CaskDB
 
 import (
-	"CaskDB/ds"
-	"CaskDB/util"
+	"github.com/k-si/CaskDB/ds"
+	"github.com/k-si/CaskDB/util"
 	"sync"
 )
 

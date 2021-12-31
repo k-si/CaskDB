@@ -1,4 +1,4 @@
-module CaskDB
+module github.com/k-si/CaskDB
 
 go 1.16
 

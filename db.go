@@ -1,10 +1,10 @@
 package CaskDB
 
 import (
-	"CaskDB/util"
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/k-si/CaskDB/util"
 	"io/ioutil"
 	"log"
 	"os"
