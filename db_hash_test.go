@@ -88,12 +88,11 @@ func TestDB_HGetAll(t *testing.T) {
 	key := []byte("key")
 	err = db.HSet(key, []byte("k1"), []byte("v1"))
 	err = db.HSet(key, []byte("k2"), []byte("v2"))
-	res, err := db.HGetAll(key)
+	_, err = db.HGetAll(key)
 
-	assert.Equal(t, "k1", string(res[0]))
-	assert.Equal(t, "v1", string(res[1]))
-	assert.Equal(t, "k2", string(res[2]))
-	assert.Equal(t, "v2", string(res[3]))
+	// k1-v1 k2-v2
+	assert.True(t, db.HExist(key, []byte("k1")))
+	assert.True(t, db.HExist(key, []byte("k2")))
 
 	err = db.Close()
 	assert.Nil(t, err)
