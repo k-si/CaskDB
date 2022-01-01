@@ -5,8 +5,6 @@ import (
 )
 
 const (
-	DefaultHost          = "127.0.0.1"
-	DefaultPort          = 4519
 	DefaultDBDir         = "/tmp/CaskDB"
 	DefaultMaxKeySize    = 1 * 1024        // 1kb
 	DefaultMaxValueSize  = 8 * 1024        // 8kb
@@ -16,8 +14,6 @@ const (
 )
 
 type Config struct {
-	Host          string        `json:"host" yaml:"host" toml:"host"`
-	Port          int           `json:"port" yaml:"port" toml:"port"`
 	DBDir         string        `json:"db_dir" yaml:"db_dir" toml:"db_dir"`
 	MaxKeySize    uint32        `json:"max_key_size" yaml:"max_key_size" toml:"max_key_size"`
 	MaxValueSize  uint32        `json:"max_val_size" yaml:"max_val_size" toml:"max_val_size"`
@@ -28,8 +24,6 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		Host:          DefaultHost,
-		Port:          DefaultPort,
 		DBDir:         DefaultDBDir,
 		MaxKeySize:    DefaultMaxKeySize,
 		MaxValueSize:  DefaultMaxValueSize,
