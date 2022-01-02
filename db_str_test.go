@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"os"
+	"strconv"
 	"testing"
 )
 
@@ -137,4 +138,56 @@ func TestDB_StrLen(t *testing.T) {
 
 	err = db.Close()
 	assert.Nil(t, err)
+}
+
+func BenchmarkDB_Set(b *testing.B) {
+	b.ReportAllocs()
+
+	os.RemoveAll("/tmp/CaskDB")
+	db, _ := Open(DefaultConfig())
+	defer db.Close()
+
+	keys := make([][]byte, 0, 10000)
+	vals := make([][]byte, 0, 10000)
+	for i := 0; i < 10000; i++ {
+		keys = append(keys, []byte(strconv.Itoa(i)))
+	}
+	for i := 0; i < 10000; i++ {
+		vals = append(vals, []byte(strconv.Itoa(i)))
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		err := db.Set(keys[i], vals[i])
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func BenchmarkDB_Get(b *testing.B) {
+	b.ReportAllocs()
+
+	os.RemoveAll("/tmp/CaskDB")
+	db, _ := Open(DefaultConfig())
+	defer db.Close()
+
+	for i := 0; i < 10000; i++ {
+		db.Set([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i)))
+	}
+	keys := make([][]byte, 0, 10000)
+	for i := 0; i < 10000; i++ {
+		keys = append(keys, []byte(strconv.Itoa(i)))
+	}
+
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := db.Get(keys[i])
+		if err != nil {
+			panic(err)
+		}
+	}
 }

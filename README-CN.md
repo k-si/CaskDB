@@ -4,13 +4,40 @@
 
 CaskDB是快速、可内嵌、易维护的k-v数据库引擎，基于Bitcask模型并使用golang实现。 它目前支持String，List、Hash、Set、ZSet五种数据结构。支持客户端连接， 和在您的go项目中内嵌使用。
 
+String类型存于磁盘文件，访问时需要随机读磁盘。其他四种类型除了追加写入磁盘外，还使用内存作为缓存提供高速计算。其中String类型的内存索引使用了AVL Tree，我个人测试来看性能不如SkipList，待后续更新我会尝试替换为Red-Black Tree。
+
 # 使用方式
 
-1、命令行
+### 命令行
 
-2、内嵌入代码
+[CaskDB-net](https://github.com/k-si/CaskDB-net) 是使用[Kinx框架](https://github.com/k-si/Kinx) 编写的tcp服务端和客户端。
 
-# 性能指标
+进入CaskDB-net/server文件夹下：
+![Image text](https://ksir-oss.oss-cn-beijing.aliyuncs.com/github/caskdb/caskdb-server.png)
+
+进入CaskDB-net/client文件夹下：
+![Image text](https://ksir-oss.oss-cn-beijing.aliyuncs.com/github/caskdb/caskdb-client.png)
+
+### 内嵌入代码
+
+```go
+package main
+
+import (
+	"github.com/k-si/CaskDB"
+	"log"
+)
+
+func main() {
+	db, err := CaskDB.Open(CaskDB.DefaultConfig())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	// do something...
+}
+```
 
 # 其他
 
@@ -67,3 +94,4 @@ CaskDB支持的数据类型和命令操作如下：
     - ZScore
     - ZCard
     - ZIsMember
+    - ZTop
