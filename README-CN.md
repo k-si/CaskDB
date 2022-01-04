@@ -4,7 +4,7 @@
 
 CaskDB是快速、可内嵌、易维护的k-v数据库引擎，基于Bitcask模型并使用golang实现。 它目前支持String，List、Hash、Set、ZSet五种数据结构。支持客户端连接， 和在您的go项目中内嵌使用。
 
-String类型存于磁盘文件，访问时需要随机读磁盘。其他四种类型除了追加写入磁盘外，还使用内存作为缓存提供高速计算。其中String类型的内存索引使用了AVL Tree，我个人测试来看性能不如SkipList，待后续更新我会尝试替换为Red-Black Tree。
+String类型存于磁盘文件，访问时需要随机读磁盘。其他四种类型除了追加写入磁盘外，还使用内存作为缓存提供高速计算。其中String类型的内存索引使用了AVL Tree，待后续更新我会尝试替换为Red-Black Tree。
 
 # 使用方式
 

@@ -11,8 +11,7 @@ embedded use in your go project.
 
 The string type is stored in the disk file, and the disk needs to be read randomly during access. The other four types
 use memory as a cache to provide high-speed computing in addition to additional writing to disk. AVL tree is used for
-the memory index of string type. My personal test shows that the performance is not as good as skiplist. I will try to
-replace it with red black tree in subsequent updates.
+the memory index of string type. I will try to replace it with red black tree in subsequent updates.
 
 # Mode of use
 
@@ -22,7 +21,6 @@ replace it with red black tree in subsequent updates.
 
 Enter the caskdb net / server folder:
 ![Image text]( https://ksir-oss.oss-cn-beijing.aliyuncs.com/github/caskdb/caskdb-server.png)
-
 
 Enter the caskdb net / client folder:
 ![Image text]( https://ksir-oss.oss-cn-beijing.aliyuncs.com/github/caskdb/caskdb-client.png)
