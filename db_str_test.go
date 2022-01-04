@@ -1,11 +1,15 @@
 package CaskDB
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"log"
+	"math/rand"
 	"os"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func TestDB_Set_Get(t *testing.T) {
@@ -140,6 +144,22 @@ func TestDB_StrLen(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+//go test -bench=BenchmarkDB_Set -benchtime=1000000x -benchmem -run=none
+//goos: darwin
+//goarch: arm64
+//pkg: github.com/k-si/CaskDB
+//BenchmarkDB_Set-8        1000000              1025 ns/op             520 B/op         10 allocs/op
+//PASS
+//ok      github.com/k-si/CaskDB  1.165s
+
+//go test -bench=BenchmarkDB_Set -benchtime=2500000x -benchmem -run=none
+//goos: darwin
+//goarch: arm64
+//pkg: github.com/k-si/CaskDB
+//BenchmarkDB_Set-8        2500000              1040 ns/op             520 B/op         10 allocs/op
+//PASS
+//ok      github.com/k-si/CaskDB  2.740s
+
 func BenchmarkDB_Set(b *testing.B) {
 	b.ReportAllocs()
 
@@ -147,24 +167,31 @@ func BenchmarkDB_Set(b *testing.B) {
 	db, _ := Open(DefaultConfig())
 	defer db.Close()
 
-	keys := make([][]byte, 0, 10000)
-	vals := make([][]byte, 0, 10000)
-	for i := 0; i < 10000; i++ {
-		keys = append(keys, []byte(strconv.Itoa(i)))
-	}
-	for i := 0; i < 10000; i++ {
-		vals = append(vals, []byte(strconv.Itoa(i)))
-	}
-
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := db.Set(keys[i], vals[i])
+		err := db.Set(getKey(i), getValue())
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 	}
 }
+
+//go test -bench=BenchmarkDB_Get -benchtime=1000000x -benchmem -run=none
+//goos: darwin
+//goarch: arm64
+//pkg: github.com/k-si/CaskDB
+//BenchmarkDB_Get-8        1000000               134.1 ns/op            24 B/op          1 allocs/op
+//PASS
+//ok      github.com/k-si/CaskDB  0.264s
+
+//go test -bench=BenchmarkDB_Get -benchtime=2500000x -benchmem -run=none
+//goos: darwin
+//goarch: arm64
+//pkg: github.com/k-si/CaskDB
+//BenchmarkDB_Get-8        2500000               123.1 ns/op            24 B/op          1 allocs/op
+//PASS
+//ok      github.com/k-si/CaskDB  0.644s
 
 func BenchmarkDB_Get(b *testing.B) {
 	b.ReportAllocs()
@@ -173,21 +200,26 @@ func BenchmarkDB_Get(b *testing.B) {
 	db, _ := Open(DefaultConfig())
 	defer db.Close()
 
-	for i := 0; i < 10000; i++ {
-		db.Set([]byte(strconv.Itoa(i)), []byte(strconv.Itoa(i)))
-	}
-	keys := make([][]byte, 0, 10000)
-	for i := 0; i < 10000; i++ {
-		keys = append(keys, []byte(strconv.Itoa(i)))
-	}
-
-
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := db.Get(keys[i])
+		_, err := db.Get(getKey(i))
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 	}
+}
+
+const alphabet = "abcdefghijklmnopqrstuvwxyz"
+
+func getKey(n int) []byte {
+	return []byte("test_key_" + fmt.Sprintf("%09d", n))
+}
+
+func getValue() []byte {
+	var str bytes.Buffer
+	for i := 0; i < 12; i++ {
+		str.WriteByte(alphabet[rand.Int()%26])
+	}
+	return []byte("test_val-" + strconv.FormatInt(time.Now().UnixNano(), 10) + str.String())
 }

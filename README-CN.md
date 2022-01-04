@@ -39,6 +39,51 @@ func main() {
 }
 ```
 
+# 基准测试
+
+测试函数详见：CaskDB/db_str_test.go
+
+### 1,000,000次读写
+
+```go
+go test -bench = BenchmarkDB_Set -benchtime = 1000000x -benchmem -run = none
+goos: darwin
+goarch: arm64
+pkg: github.com/k-si/CaskDB
+BenchmarkDB_Set-8        1000000              1025 ns/op             520 B/op         10 allocs/op
+PASS
+ok      github.com/k-si/CaskDB  1.165s
+
+
+go test -bench = BenchmarkDB_Get -benchtime = 1000000x -benchmem -run = none
+goos: darwin
+goarch: arm64
+pkg: github.com/k-si/CaskDB
+BenchmarkDB_Get-8        1000000               134.1 ns/op            24 B/op          1 allocs/op
+PASS
+ok      github.com/k-si/CaskDB  0.264s
+```
+
+### 2,500,000次读写
+
+```go
+go test -bench = BenchmarkDB_Set -benchtime = 2500000x -benchmem -run = none
+goos: darwin
+goarch: arm64
+pkg: github.com/k-si/CaskDB
+BenchmarkDB_Set-8        2500000              1040 ns/op             520 B/op         10 allocs/op
+PASS
+ok      github.com/k-si/CaskDB  2.740s
+
+go test -bench = BenchmarkDB_Get -benchtime = 2500000x -benchmem -run = none
+goos: darwin
+goarch: arm64
+pkg: github.com/k-si/CaskDB
+BenchmarkDB_Get-8        2500000               123.1 ns/op            24 B/op          1 allocs/op
+PASS
+ok      github.com/k-si/CaskDB  0.644s
+```
+
 # 其他
 
 CaskDB支持的数据类型和命令操作如下：
