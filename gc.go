@@ -13,15 +13,24 @@ import (
 
 func (db *DB) listeningGC() {
 	timer := time.NewTimer(db.config.MergeInterval)
-	defer timer.Stop()
+	defer func() {
+		if !timer.Stop() {
+			<-timer.C
+		}
+	}()
 
-	select {
-	case <-db.listenChan:
-		break
-	case <-timer.C:
-		timer.Reset(db.config.MergeInterval)
-		if err := db.GC(); err != nil {
-			log.Println("[GC err]", err)
+Over:
+	for {
+		select {
+		case <-db.listenChan:
+			break Over
+		case <-timer.C:
+			log.Println("[start GC]")
+			timer.Reset(db.config.MergeInterval)
+			if err := db.GC(); err != nil {
+				log.Fatal("[GC err]", err)
+			}
+			log.Println("[over GC]")
 		}
 	}
 }
@@ -109,7 +118,7 @@ func (db *DB) GC() error {
 
 					// read all entry from files, but except empty file
 					var offset int64
-					if offset == f.offset {
+					if 0 == f.offset {
 						continue
 					}
 					for offset < f.offset {
@@ -140,28 +149,27 @@ func (db *DB) GC() error {
 					}
 				}
 			}
-			// update archedFiles
-			if mergedActiveFile == nil {
-				mergeErr = ErrorNilMergedFile
-				return
-			}
-			db.activeFiles[i] = mergedActiveFile
-			db.archedFiles[i] = mergedArchedFiles
 
-			// rename new merged file
-			fi, _ := mergedActiveFile.fd.Stat()
-			name := PathSeparator + fi.Name()
-			if mergeErr = os.Rename(mergePath+name, db.config.DBDir+name); mergeErr != nil {
-				return
-			}
-			for _, f := range db.archedFiles[i] {
-				fi, _ = f.fd.Stat()
-				name = PathSeparator + fi.Name()
+			if mergedActiveFile != nil {
+
+				// update archedFiles
+				db.activeFiles[i] = mergedActiveFile
+				db.archedFiles[i] = mergedArchedFiles
+
+				// rename new merged file
+				fi, _ := mergedActiveFile.fd.Stat()
+				name := PathSeparator + fi.Name()
 				if mergeErr = os.Rename(mergePath+name, db.config.DBDir+name); mergeErr != nil {
 					return
 				}
+				for _, f := range db.archedFiles[i] {
+					fi, _ = f.fd.Stat()
+					name = PathSeparator + fi.Name()
+					if mergeErr = os.Rename(mergePath+name, db.config.DBDir+name); mergeErr != nil {
+						return
+					}
+				}
 			}
-
 		}(i)
 	}
 	wg.Wait()

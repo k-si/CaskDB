@@ -2,6 +2,7 @@ package CaskDB
 
 import (
 	"github.com/stretchr/testify/assert"
+	"log"
 	"os"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 
 // test data overflow
 func TestDB_GC_Str(t *testing.T) {
+	log.Println("gc str")
 	os.RemoveAll("/tmp/CaskDB")
 
 	cfg := DefaultConfig()
@@ -61,6 +63,7 @@ func TestDB_GC_Str(t *testing.T) {
 
 // test List snapshot
 func TestDB_GC_List(t *testing.T) {
+	log.Println("gc list")
 	os.RemoveAll("/tmp/CaskDB")
 
 	cfg := DefaultConfig()
@@ -102,6 +105,7 @@ func TestDB_GC_List(t *testing.T) {
 }
 
 func TestDB_GC_Hash(t *testing.T) {
+	log.Println("gc hash")
 	os.RemoveAll("/tmp/CaskDB")
 
 	cfg := DefaultConfig()
@@ -134,6 +138,7 @@ func TestDB_GC_Hash(t *testing.T) {
 }
 
 func TestDB_GC_Set(t *testing.T) {
+	log.Println("gc set")
 	os.RemoveAll("/tmp/CaskDB")
 
 	cfg := DefaultConfig()
@@ -170,6 +175,7 @@ func TestDB_GC_Set(t *testing.T) {
 }
 
 func TestDB_GC_ZSet(t *testing.T) {
+	log.Println("gc zset")
 	os.RemoveAll("/tmp/CaskDB")
 
 	cfg := DefaultConfig()
@@ -199,6 +205,22 @@ func TestDB_GC_ZSet(t *testing.T) {
 	assert.Equal(t, 0.2, s)
 	ok, s = db.ZScore(k, []byte("b"))
 	assert.False(t, ok)
+
+	err = db.Close()
+	assert.Nil(t, err)
+}
+
+func TestDB_GC(t *testing.T) {
+	log.Println("gc")
+	os.RemoveAll("/tmp/CaskDB")
+
+	cfg := DefaultConfig()
+	cfg.MergeInterval = 3 * time.Second
+
+	db, err := Open(cfg)
+	assert.Nil(t, err)
+
+	time.Sleep(5 * time.Second)
 
 	err = db.Close()
 	assert.Nil(t, err)

@@ -27,14 +27,13 @@ var (
 	ErrorClosedDB       = errors.New("[using a closed DB]")
 	ErrorMergingMerge   = errors.New("[start merge when db is merging]")
 	ErrorEmptyHeader    = errors.New("[read an empty entry header, maybe read 0]")
-	ErrorNilMergedFile  = errors.New("[active merged file nil]")
 	ErrorNilPointer     = errors.New("[nil variable]")
 	ErrorMSetParams     = errors.New("[MSet needs paired parameters]")
 )
 
 const (
 	MergeDirName   = "merged"
-	ConfigFileName = "CaskDB.conf"
+	ConfigFileName = "latest.cfg"
 	PathSeparator  = string(os.PathSeparator)
 	DataTypeNum    = 5
 )
@@ -76,6 +75,8 @@ func Open(config Config) (*DB, error) {
 		hashIndex:  NewHashIndex(),
 		setIndex:   NewSetIndex(),
 		zsetIndex:  NewZSetIndex(),
+		isMerging:  0,
+		isClosed:   0,
 		mergeChan:  make(chan struct{}, DataTypeNum),
 		listenChan: make(chan struct{}),
 	}
@@ -88,8 +89,6 @@ func Open(config Config) (*DB, error) {
 	}
 	db.activeFiles = activeFiles
 	db.archedFiles = archedFiles
-
-	// todo: load transaction
 
 	// load memory indexes
 	if err := db.loadIndexes(fids); err != nil {
@@ -112,6 +111,9 @@ func (db *DB) Close() error {
 		if err := db.StopGC(); err != nil {
 			return err
 		}
+	} else {
+		db.listenChan <- struct{}{}
+		return nil
 	}
 
 	// save configuration
