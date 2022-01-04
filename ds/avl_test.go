@@ -145,10 +145,10 @@ func BenchmarkAVLTree_Get(b *testing.B) {
 
 //goos: darwin
 //goarch: arm64
-//pkg: CaskDB/ds
-//BenchmarkAVLTree_Put-8             10000            156399 ns/op              87 B/op          3 allocs/op
+//pkg: github.com/k-si/CaskDB/ds
+//BenchmarkAVLTree_Put-8           3757609               340.1 ns/op            87 B/op          3 allocs/op
 //PASS
-//ok      CaskDB/ds       1.846s
+//ok      github.com/k-si/CaskDB/ds       1.797s
 
 func BenchmarkAVLTree_Put(b *testing.B) {
 	avl := PrepareAVL()

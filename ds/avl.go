@@ -235,7 +235,8 @@ func getHeight(n *aVLTreeNode) int {
 	if n == nil {
 		return 0
 	}
-	return max(getHeight(n.left), getHeight(n.right)) + 1
+	return n.height
+	//return max(getHeight(n.left), getHeight(n.right)) + 1
 }
 
 // 子树中最大值节点
