@@ -25,12 +25,14 @@ Over:
 		case <-db.listenChan:
 			break Over
 		case <-timer.C:
-			log.Println("[start GC]")
 			timer.Reset(db.config.MergeInterval)
 			if err := db.GC(); err != nil {
-				log.Fatal("[GC err]", err)
+				log.Println("[GC err]", err)
+				if err := db.Rollback(); err != nil {
+					log.Fatal("[rollback fail]")
+				}
+				log.Println("[rollback finish]")
 			}
-			log.Println("[over GC]")
 		}
 	}
 }
@@ -63,6 +65,11 @@ func (db *DB) GC() error {
 	// change status
 	atomic.StoreUint32(&db.isMerging, 1)
 	defer atomic.StoreUint32(&db.isMerging, 0)
+
+	// backup
+	if err := db.Backup(); err != nil {
+		return err
+	}
 
 	// check merged path
 	mergePath := db.config.DBDir + PathSeparator + MergeDirName
@@ -160,6 +167,12 @@ func (db *DB) GC() error {
 				fi, _ := mergedActiveFile.fd.Stat()
 				name := PathSeparator + fi.Name()
 				if mergeErr = os.Rename(mergePath+name, db.config.DBDir+name); mergeErr != nil {
+					if _, err := os.Stat(mergePath + name); err != nil {
+						log.Println(err)
+					}
+					if _, err := os.Stat(db.config.DBDir + name); err != nil {
+						log.Println(err)
+					}
 					return
 				}
 				for _, f := range db.archedFiles[i] {
@@ -175,7 +188,6 @@ func (db *DB) GC() error {
 	wg.Wait()
 
 	if mergeErr != nil {
-		// todo: rollback
 		return mergeErr
 	}
 

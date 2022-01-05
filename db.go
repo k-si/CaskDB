@@ -265,6 +265,23 @@ func (db *DB) StoreFile(e *Entry) error {
 	return nil
 }
 
+func (db *DB) Backup() error {
+	if err := util.CheckAndMakeDir(db.config.BackupDir); err != nil {
+		return err
+	}
+	if err := util.CopyDir(db.config.DBDir, db.config.BackupDir); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *DB) Rollback() error {
+	if err := util.CopyDir(db.config.BackupDir, db.config.DBDir); err != nil {
+		return err
+	}
+	return nil
+}
+
 // splice two bytes in a []byte
 func (db *DB) splice(k1, k2 []byte) []byte {
 	var buf bytes.Buffer

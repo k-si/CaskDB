@@ -6,6 +6,7 @@ import (
 
 const (
 	DefaultDBDir         = "/tmp/caskdb"
+	DefaultBackupDir     = "/tmp/caskdb-backup"
 	DefaultMaxKeySize    = 1 * 1024 * 1024  // 1mb
 	DefaultMaxValueSize  = 4 * 1024 * 1024  // 4mb
 	DefaultMaxFileSize   = 16 * 1024 * 1024 // 16mb
@@ -15,6 +16,7 @@ const (
 
 type Config struct {
 	DBDir         string        `json:"db_dir" yaml:"db_dir" toml:"db_dir"`
+	BackupDir     string        `json:"back_up_dir" yaml:"back_up_dir" toml:"back_up_dir"`
 	MaxKeySize    uint32        `json:"max_key_size" yaml:"max_key_size" toml:"max_key_size"`
 	MaxValueSize  uint32        `json:"max_val_size" yaml:"max_val_size" toml:"max_val_size"`
 	MaxFileSize   int64         `json:"max_file_size" yaml:"max_file_size" toml:"max_file_size"`
@@ -25,6 +27,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		DBDir:         DefaultDBDir,
+		BackupDir:     DefaultBackupDir,
 		MaxKeySize:    DefaultMaxKeySize,
 		MaxValueSize:  DefaultMaxValueSize,
 		MaxFileSize:   DefaultMaxFileSize,
