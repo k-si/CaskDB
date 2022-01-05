@@ -5,10 +5,10 @@ import (
 )
 
 const (
-	DefaultDBDir         = "/tmp/CaskDB"
+	DefaultDBDir         = "/tmp/caskdb"
 	DefaultMaxKeySize    = 1 * 1024 * 1024  // 1mb
 	DefaultMaxValueSize  = 4 * 1024 * 1024  // 4mb
-	DefaultMaxFileSize   = 32 * 1024 * 1024 // 32mb
+	DefaultMaxFileSize   = 16 * 1024 * 1024 // 16mb
 	DefaultMergeInterval = 24 * time.Hour
 	DefaultWriteSync     = false
 )
