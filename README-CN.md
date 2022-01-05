@@ -46,7 +46,7 @@ func main() {
 ### 1,000,000次读写
 
 ```go
-go test -bench = BenchmarkDB_Set -benchtime = 1000000x -benchmem -run = none
+go test -bench=BenchmarkDB_Set -benchtime=1000000x -benchmem -run=none
 goos: darwin
 goarch: arm64
 pkg: github.com/k-si/CaskDB
@@ -54,34 +54,52 @@ BenchmarkDB_Set-8        1000000              1025 ns/op             520 B/op   
 PASS
 ok      github.com/k-si/CaskDB  1.165s
 
-
-go test -bench = BenchmarkDB_Get -benchtime = 1000000x -benchmem -run = none
+go test -bench=BenchmarkDB_Get -benchtime=1000000x -benchmem -run=none
 goos: darwin
 goarch: arm64
 pkg: github.com/k-si/CaskDB
-BenchmarkDB_Get-8        1000000               134.1 ns/op            24 B/op          1 allocs/op
+BenchmarkDB_Get-8        1000000               358.6 ns/op            71 B/op          2 allocs/op
 PASS
-ok      github.com/k-si/CaskDB  0.264s
+ok      github.com/k-si/CaskDB  1.516s
 ```
 
-### 2,500,000次读写
+### 5,000,000次读写
 
 ```go
-go test -bench = BenchmarkDB_Set -benchtime = 2500000x -benchmem -run = none
+go test -bench=BenchmarkDB_Set -benchtime=5000000x -benchmem -run=none
 goos: darwin
 goarch: arm64
 pkg: github.com/k-si/CaskDB
-BenchmarkDB_Set-8        2500000              1040 ns/op             520 B/op         10 allocs/op
+BenchmarkDB_Set-8        5000000              1039 ns/op             520 B/op         11 allocs/op
 PASS
-ok      github.com/k-si/CaskDB  2.740s
+ok      github.com/k-si/CaskDB  5.647s
 
-go test -bench = BenchmarkDB_Get -benchtime = 2500000x -benchmem -run = none
+go test -bench=BenchmarkDB_Get -benchtime=5000000x -benchmem -run=none
 goos: darwin
 goarch: arm64
 pkg: github.com/k-si/CaskDB
-BenchmarkDB_Get-8        2500000               123.1 ns/op            24 B/op          1 allocs/op
+BenchmarkDB_Get-8        5000000               399.5 ns/op            71 B/op          2 allocs/op
 PASS
-ok      github.com/k-si/CaskDB  0.644s
+ok      github.com/k-si/CaskDB  7.457s
+```
+
+### 10,000,000次读写
+```go
+go test -bench=BenchmarkDB_Set -benchtime=10000000x -benchmem -run=none
+goos: darwin
+goarch: arm64
+pkg: github.com/k-si/CaskDB
+BenchmarkDB_Set-8       10000000              1058 ns/op             520 B/op         11 allocs/op
+PASS
+ok      github.com/k-si/CaskDB  11.234s
+
+go test -bench=BenchmarkDB_Get -benchtime=10000000x -benchmem -run=none
+goos: darwin
+goarch: arm64
+pkg: github.com/k-si/CaskDB
+BenchmarkDB_Get-8       10000000               404.1 ns/op            71 B/op          2 allocs/op
+PASS
+ok      github.com/k-si/CaskDB  15.463s
 ```
 
 # 其他
