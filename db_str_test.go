@@ -181,17 +181,17 @@ func BenchmarkDB_Set(b *testing.B) {
 //goos: darwin
 //goarch: arm64
 //pkg: github.com/k-si/CaskDB
-//BenchmarkDB_Get-8        1000000               134.1 ns/op            24 B/op          1 allocs/op
+//BenchmarkDB_Get-8        1000000               358.6 ns/op            71 B/op          2 allocs/op
 //PASS
-//ok      github.com/k-si/CaskDB  0.264s
+//ok      github.com/k-si/CaskDB  1.516s
 
 //go test -bench=BenchmarkDB_Get -benchtime=2500000x -benchmem -run=none
 //goos: darwin
 //goarch: arm64
 //pkg: github.com/k-si/CaskDB
-//BenchmarkDB_Get-8        2500000               123.1 ns/op            24 B/op          1 allocs/op
+//BenchmarkDB_Get-8        2500000               377.4 ns/op            71 B/op          2 allocs/op
 //PASS
-//ok      github.com/k-si/CaskDB  0.644s
+//ok      github.com/k-si/CaskDB  3.910s
 
 func BenchmarkDB_Get(b *testing.B) {
 	b.ReportAllocs()
@@ -199,6 +199,13 @@ func BenchmarkDB_Get(b *testing.B) {
 	os.RemoveAll("/tmp/CaskDB")
 	db, _ := Open(DefaultConfig())
 	defer db.Close()
+
+	for i := 0; i < b.N; i++ {
+		err := db.Set(getKey(i), getValue())
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	b.ResetTimer()
 
