@@ -28,18 +28,38 @@ Over:
 			timer.Reset(db.config.MergeInterval)
 			if err := db.GC(); err != nil {
 				log.Println("[GC err]", err)
-				if err := db.Rollback(); err != nil {
+
+				// file rollback
+				if err := db.FilesRollback(); err != nil {
 					log.Fatal("[rollback fail]")
+				}
+
+				// fd rollback
+				for _, f := range db.activeFiles {
+					if err := f.Close(true); err != nil {
+						log.Fatal(err)
+					}
+				}
+				for _, item := range db.archedFiles {
+					for _, f := range item {
+						if err := f.Close(true); err != nil {
+							log.Fatal(err)
+						}
+					}
+				}
+				db.activeFiles, db.archedFiles, _, err = db.loadFiles()
+				if err != nil {
+					log.Fatal(err)
 				}
 				log.Println("[rollback finish]")
 			}
+			log.Println(">>> restart the world <<<")
 		}
 	}
 }
 
 // garbage file recycling
 // merge all files and remove useless data
-// todo: backpack and rollback
 func (db *DB) GC() error {
 
 	// check status
@@ -50,7 +70,7 @@ func (db *DB) GC() error {
 		return ErrorMergingMerge
 	}
 
-	log.Println("[stop the world]")
+	log.Println(">>> stop the world <<<")
 	db.strIndex.mu.Lock()
 	db.hashIndex.mu.Lock()
 	db.listIndex.mu.Lock()
@@ -67,7 +87,7 @@ func (db *DB) GC() error {
 	defer atomic.StoreUint32(&db.isMerging, 0)
 
 	// backup
-	if err := db.Backup(); err != nil {
+	if err := db.FilesBackup(); err != nil {
 		return err
 	}
 
@@ -157,32 +177,10 @@ func (db *DB) GC() error {
 				}
 			}
 
-			if mergedActiveFile != nil {
-
-				// update archedFiles
-				db.activeFiles[i] = mergedActiveFile
-				db.archedFiles[i] = mergedArchedFiles
-
-				// rename new merged file
-				fi, _ := mergedActiveFile.fd.Stat()
-				name := PathSeparator + fi.Name()
-				if mergeErr = os.Rename(mergePath+name, db.config.DBDir+name); mergeErr != nil {
-					if _, err := os.Stat(mergePath + name); err != nil {
-						log.Println(err)
-					}
-					if _, err := os.Stat(db.config.DBDir + name); err != nil {
-						log.Println(err)
-					}
-					return
-				}
-				for _, f := range db.archedFiles[i] {
-					fi, _ = f.fd.Stat()
-					name = PathSeparator + fi.Name()
-					if mergeErr = os.Rename(mergePath+name, db.config.DBDir+name); mergeErr != nil {
-						return
-					}
-				}
+			if mergeErr = db.buildFromMerged(mergedActiveFile, mergedArchedFiles, i, mergePath); mergeErr != nil {
+				return
 			}
+
 		}(i)
 	}
 	wg.Wait()
@@ -214,6 +212,79 @@ func (db *DB) StopGC() error {
 			}
 		}()
 	}
+	return nil
+}
+
+func (db *DB) buildFromMerged(mergedActiveFile *File, mergedArchedFiles map[uint32]*File, i int, mergePath string) error {
+	if mergedActiveFile != nil {
+
+		// save file info
+		fi, err := mergedActiveFile.fd.Stat()
+		if err != nil {
+			return err
+		}
+		name := PathSeparator + fi.Name()
+		tmpId := mergedActiveFile.id
+		tmpOff := mergedActiveFile.offset
+
+		// close merged file
+		if err = mergedActiveFile.Close(true); err != nil {
+			return err
+		}
+
+		// rename new merged file
+		oldPath := mergePath + name
+		newPath := db.config.DBDir + name
+		if err = os.Rename(oldPath, newPath); err != nil {
+			return err
+		}
+
+		// reopen file
+		activeFile, err := NewFile(db.config.DBDir, tmpId, uint16(i), db.config.MaxFileSize)
+		if err != nil {
+			return err
+		}
+		activeFile.offset = tmpOff
+
+		// do same
+		var archedFiles = make(map[uint32]*File)
+		for _, f := range mergedArchedFiles {
+
+			// save info
+			fi, err = f.fd.Stat()
+			if err != nil {
+				return err
+			}
+			name = PathSeparator + fi.Name()
+			tmpId = f.id
+			tmpOff = f.offset
+
+			// close merged file
+			if err = f.Close(true); err != nil {
+				return err
+			}
+
+			// rename file
+			oldPath = mergePath + name
+			newPath = db.config.DBDir + name
+			if err = os.Rename(oldPath, newPath); err != nil {
+				return err
+			}
+
+			// reopen file
+			ac, err := NewFile(db.config.DBDir, tmpId, uint16(i), db.config.MaxFileSize)
+			if err != nil {
+				return err
+			}
+			ac.offset = tmpOff
+			archedFiles[ac.id] = ac
+		}
+
+		// update fd
+		db.activeFiles[i] = activeFile
+		db.archedFiles[i] = archedFiles
+	}
+
 	return nil
 }
 

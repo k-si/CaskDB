@@ -265,7 +265,7 @@ func (db *DB) StoreFile(e *Entry) error {
 	return nil
 }
 
-func (db *DB) Backup() error {
+func (db *DB) FilesBackup() error {
 	if err := util.CheckAndMakeDir(db.config.BackupDir); err != nil {
 		return err
 	}
@@ -275,7 +275,7 @@ func (db *DB) Backup() error {
 	return nil
 }
 
-func (db *DB) Rollback() error {
+func (db *DB) FilesRollback() error {
 	if err := util.CopyDir(db.config.BackupDir, db.config.DBDir); err != nil {
 		return err
 	}

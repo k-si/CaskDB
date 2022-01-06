@@ -1,8 +1,6 @@
 package CaskDB
 
-import (
-	"os"
-)
+import "os"
 
 // due to the particularity of list structure storage,
 // it is necessary to use snapshots for garbage collection
@@ -42,21 +40,8 @@ func (db *DB) listSnapshot(mergePath string) error {
 			return err
 		}
 
-		db.activeFiles[1] = mergedActiveFile
-		db.archedFiles[1] = mergedArchedFiles
-
-		// rename new merged file
-		fi, _ := mergedActiveFile.fd.Stat()
-		name := PathSeparator + fi.Name()
-		if err := os.Rename(mergePath+name, db.config.DBDir+name); err != nil {
+		if err := db.buildFromMerged(mergedActiveFile, mergedArchedFiles, 1, mergePath); err != nil {
 			return err
-		}
-		for _, f := range db.archedFiles[1] {
-			fi, _ = f.fd.Stat()
-			name = PathSeparator + fi.Name()
-			if err := os.Rename(mergePath+name, db.config.DBDir+name); err != nil {
-				return err
-			}
 		}
 	}
 
