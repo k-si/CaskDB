@@ -83,6 +83,9 @@ func (f *File) Close(sync bool) error {
 			return err
 		}
 	}
+	if err := f.fd.Close(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -139,9 +142,9 @@ func (f *File) Read(offset int64) (*Entry, error) {
 
 // read value from file
 func (f *File) ReadValue(offset int64) ([]byte, error) {
-	ksz := binary.BigEndian.Uint32(f.mmap[offset+14:offset+18])
-	vsz := binary.BigEndian.Uint32(f.mmap[offset+18:offset+22])
-	v, err := f.ReadBuf(offset+int64(EntryHeaderSize + ksz), int64(vsz))
+	ksz := binary.BigEndian.Uint32(f.mmap[offset+14 : offset+18])
+	vsz := binary.BigEndian.Uint32(f.mmap[offset+18 : offset+22])
+	v, err := f.ReadBuf(offset+int64(EntryHeaderSize+ksz), int64(vsz))
 	if err != nil {
 		return nil, err
 	}
