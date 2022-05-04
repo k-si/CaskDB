@@ -144,7 +144,7 @@ func TestDB_StrLen(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-//go test -bench=BenchmarkDB_Set -benchtime=1000000x -benchmem -run=none
+//go test -bench=BenchmarkDB_Set -benchtime=1000000x -benchmem -memprofile=mem.pprof -cpuprofile=cpu.pprof -run=none
 //goos: darwin
 //goarch: arm64
 //pkg: github.com/k-si/CaskDB
@@ -210,7 +210,10 @@ func BenchmarkDB_Get(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := db.Get(getKey(i))
+		v, err := db.Get(getKey(i))
+		if v == nil {
+			fmt.Println("nil nil")
+		}
 		if err != nil {
 			log.Fatal(err)
 		}

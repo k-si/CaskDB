@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	DefaultDBDir         = "/tmp/caskdb"
+	DefaultDBDir         = "/tmp/CaskDB"
 	DefaultBackupDir     = "/tmp/caskdb-backup"
 	DefaultMaxKeySize    = 1 * 1024 * 1024  // 1mb
 	DefaultMaxValueSize  = 4 * 1024 * 1024  // 4mb
